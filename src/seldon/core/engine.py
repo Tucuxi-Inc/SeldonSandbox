@@ -1,25 +1,37 @@
 """
 Main simulation engine.
 
-Runs the multi-generational simulation with 7 phases per generation,
+Runs the multi-generational simulation with phases per generation,
 extension hooks, outsider injection support, and full metrics collection.
+
+Phase 2 enhancements:
+- CognitiveCouncil voice updates
+- Memory creation on breakthroughs/suffering
+- Dissolution and infidelity via RelationshipManager
+- FertilityManager for reproduction decisions
+- Lore transmission and evolution
+- Outsider injection and ripple tracking
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
-from uuid import uuid4
 
 import numpy as np
 
 from seldon.core.agent import Agent
 from seldon.core.attraction import AttractionModel
 from seldon.core.config import ExperimentConfig
+from seldon.core.council import CognitiveCouncil
 from seldon.core.decision import DecisionContext, DecisionModel
 from seldon.core.drift import TraitDriftEngine
 from seldon.core.inheritance import InheritanceEngine
 from seldon.core.processing import ProcessingClassifier, ProcessingRegion
+from seldon.experiment.outsider import OutsiderInterface, RippleTracker
+from seldon.social.fertility import FertilityManager
+from seldon.social.lore import LoreEngine
+from seldon.social.relationships import RelationshipManager
 
 
 # ---------------------------------------------------------------------------
@@ -85,12 +97,14 @@ class SimulationEngine:
 
     Phases per generation:
     1. Age & trait drift
-    2. Processing region updates
-    3. Contribution & breakthroughs
-    4. Relationship dynamics (pairing)
-    5. Reproduction
-    6. Mortality
-    7. Record metrics
+    2. Processing region updates + council voice
+    3. Contribution & breakthroughs + memory creation
+    4. Relationship dynamics (dissolution, infidelity, pairing)
+    5. Reproduction + lore transmission
+    6. Lore evolution
+    7. Outsider injection + ripple tracking
+    8. Mortality
+    9. Record metrics
     """
 
     def __init__(self, config: ExperimentConfig):
@@ -104,6 +118,14 @@ class SimulationEngine:
         self.drift_engine = TraitDriftEngine(config)
         self.attraction = AttractionModel(config)
         self.decision_model = DecisionModel(config)
+
+        # Phase 2 components
+        self.council = CognitiveCouncil(config)
+        self.lore_engine = LoreEngine(config)
+        self.relationship_manager = RelationshipManager(config, self.attraction)
+        self.fertility_manager = FertilityManager(config)
+        self.outsider_interface = OutsiderInterface(config, self.classifier)
+        self.ripple_tracker = RippleTracker(config)
 
         # State
         self.population: list[Agent] = []
@@ -149,6 +171,8 @@ class SimulationEngine:
     def _run_generation(self, generation: int) -> GenerationSnapshot:
         events: dict[str, Any] = {
             "births": 0, "deaths": 0, "breakthroughs": 0, "pairs_formed": 0,
+            "dissolutions": 0, "infidelity_events": 0, "outsiders_injected": 0,
+            "memories_created": 0, "lore_transmitted": 0,
         }
 
         # === Phase 1: Age and trait drift ===
@@ -157,13 +181,15 @@ class SimulationEngine:
             agent.traits = self.drift_engine.drift_traits(agent, self.rng)
             agent.traits = self.drift_engine.apply_region_effects(agent)
 
-        # === Phase 2: Processing region updates ===
+        # === Phase 2: Processing region updates + council voice ===
         for agent in self.population:
             agent.processing_region = self.classifier.classify(agent)
             self.drift_engine.update_suffering(agent)
             self.drift_engine.update_burnout(agent)
+            # Council voice update (no-op if disabled)
+            agent.dominant_voice = self.council.get_dominant_voice(agent)
 
-        # === Phase 3: Contribution and breakthroughs ===
+        # === Phase 3: Contribution and breakthroughs + memory ===
         generation_contributions: list[float] = []
         for agent in self.population:
             contribution, breakthrough = self._calculate_contribution(agent)
@@ -171,14 +197,47 @@ class SimulationEngine:
             generation_contributions.append(contribution)
             if breakthrough:
                 events["breakthroughs"] += 1
+                # Create breakthrough memory
+                if self.config.lore_enabled:
+                    mem = self.lore_engine.create_breakthrough_memory(
+                        agent.id, generation, contribution,
+                    )
+                    agent.personal_memories.append(mem.to_dict())
+                    events["memories_created"] += 1
 
-        # === Phase 4: Pairing ===
-        min_age = self.config.relationship_config["pairing_min_age"]
-        eligible = [a for a in self.population if a.is_eligible_for_pairing(min_age)]
-        pairs = self._form_pairs(eligible)
+            # Create suffering memory for agents in R4/R5
+            if (self.config.lore_enabled
+                    and agent.suffering > 0.6
+                    and agent.processing_region in (
+                        ProcessingRegion.SACRIFICIAL,
+                        ProcessingRegion.PATHOLOGICAL,
+                    )):
+                mem = self.lore_engine.create_suffering_memory(
+                    agent.id, generation, agent.suffering,
+                )
+                agent.personal_memories.append(mem.to_dict())
+                events["memories_created"] += 1
+
+        # === Phase 4: Relationship dynamics ===
+        # 4a: Dissolution
+        dissolved = self.relationship_manager.process_dissolutions(
+            self.population, generation, self.rng,
+        )
+        events["dissolutions"] = len(dissolved)
+
+        # 4b: Infidelity
+        infidelity = self.relationship_manager.check_infidelity(
+            self.population, generation, self.rng,
+        )
+        events["infidelity_events"] = len(infidelity)
+
+        # 4c: Pairing (via RelationshipManager)
+        pairs = self.relationship_manager.form_pairs(
+            self.population, generation, self.rng,
+        )
         events["pairs_formed"] = len(pairs)
 
-        # === Phase 5: Reproduction ===
+        # === Phase 5: Reproduction + lore transmission ===
         new_children: list[Agent] = []
         paired_agents = [
             (a, self._find_agent(a.partner_id))
@@ -189,15 +248,41 @@ class SimulationEngine:
         for p1, p2 in paired_agents:
             if p2 is None or not p1.is_alive or not p2.is_alive:
                 continue
-            if self._will_reproduce(p1, p2, generation):
+            if self.fertility_manager.will_reproduce(p1, p2, generation, self.rng):
                 child = self._create_child(p1, p2, generation)
                 if child is not None:
                     new_children.append(child)
                     events["births"] += 1
 
+                    # Lore transmission
+                    if self.config.lore_enabled:
+                        lore_count = self._transmit_lore(p1, p2, child)
+                        events["lore_transmitted"] += lore_count
+
         self.population.extend(new_children)
 
-        # === Phase 6: Mortality ===
+        # === Phase 6: Lore evolution ===
+        if self.config.lore_enabled:
+            pop_memories = [
+                a.personal_memories + a.inherited_lore
+                for a in self.population
+            ]
+            self.lore_engine.evolve_societal_lore(pop_memories, generation, self.rng)
+
+        # === Phase 7: Outsider injection + ripple tracking ===
+        outsiders = self.outsider_interface.process_scheduled_injections(
+            generation, self.rng,
+        )
+        for outsider in outsiders:
+            self.population.append(outsider)
+            self.ripple_tracker.track_injection(
+                self.outsider_interface.injections[-1]
+            )
+        events["outsiders_injected"] = len(outsiders)
+
+        self.ripple_tracker.track_generation(self.population, generation)
+
+        # === Phase 8: Mortality ===
         for agent in self.population:
             if not agent.is_alive:
                 continue
@@ -215,8 +300,27 @@ class SimulationEngine:
         # Remove dead agents
         self.population = [a for a in self.population if a.is_alive]
 
-        # === Phase 7: Build snapshot ===
+        # === Phase 9: Build snapshot ===
         return self._build_snapshot(generation, events, generation_contributions)
+
+    # ------------------------------------------------------------------
+    # Lore transmission
+    # ------------------------------------------------------------------
+    def _transmit_lore(
+        self, parent1: Agent, parent2: Agent, child: Agent,
+    ) -> int:
+        """Transmit memories from parents to child. Returns count transmitted."""
+        count = 0
+        for parent in (parent1, parent2):
+            all_memories = parent.personal_memories + parent.inherited_lore
+            for mem_dict in all_memories:
+                from seldon.social.lore import Memory
+                mem = Memory.from_dict(mem_dict)
+                if self.lore_engine.should_transmit(mem, self.rng):
+                    child_mem = self.lore_engine.transmit_to_child(mem, self.rng)
+                    child.inherited_lore.append(child_mem.to_dict())
+                    count += 1
+        return count
 
     # ------------------------------------------------------------------
     # Contribution & breakthroughs
@@ -252,71 +356,26 @@ class SimulationEngine:
         return contribution, breakthrough
 
     # ------------------------------------------------------------------
-    # Pairing
-    # ------------------------------------------------------------------
-    def _form_pairs(self, eligible: list[Agent]) -> list[tuple[Agent, Agent]]:
-        """Form pairs from eligible agents, weighted by attraction."""
-        pairs: list[tuple[Agent, Agent]] = []
-        unpaired = list(eligible)
-        self.rng.shuffle(unpaired)
-
-        while len(unpaired) >= 2:
-            a1 = unpaired.pop(0)
-
-            # Calculate attraction to all remaining
-            scores = np.array([
-                self.attraction.calculate(a1, a2, self.rng) for a2 in unpaired
-            ])
-            scores = np.maximum(scores, 0.0)
-
-            if scores.sum() <= 0:
-                continue
-
-            # Weighted random selection
-            probs = scores / scores.sum()
-            idx = self.rng.choice(len(unpaired), p=probs)
-            partner = unpaired.pop(idx)
-
-            # Link them
-            a1.partner_id = partner.id
-            partner.partner_id = a1.id
-            a1.relationship_status = "paired"
-            partner.relationship_status = "paired"
-
-            pairs.append((a1, partner))
-
-        return pairs
-
-    # ------------------------------------------------------------------
     # Reproduction
     # ------------------------------------------------------------------
-    def _will_reproduce(self, p1: Agent, p2: Agent, generation: int) -> bool:
-        """Determine if a pair reproduces this generation."""
-        fc = self.config.fertility_config
-
-        # Check birth spacing
-        for p in (p1, p2):
-            if p.last_birth_generation is not None:
-                gap = generation - p.last_birth_generation
-                if gap < fc["min_birth_spacing_generations"]:
-                    return False
-
-        # Base probability influenced by societal pressure and traits
-        base_prob = 0.3 + fc["societal_fertility_pressure"] * 0.2
-        return bool(self.rng.random() < base_prob)
-
     def _create_child(
         self, parent1: Agent, parent2: Agent, generation: int,
     ) -> Agent | None:
         """Create a child agent via the inheritance engine."""
-        fc = self.config.fertility_config
-
         # Child mortality check
-        if self.rng.random() < fc["child_mortality_rate"]:
+        if self.fertility_manager.check_child_mortality(self.rng):
             # Child dies at birth — still counts for birth order
             parent1.children_ids.append("stillborn")
             parent2.children_ids.append("stillborn")
             return None
+
+        # Maternal mortality check
+        if self.fertility_manager.check_maternal_mortality(self.rng):
+            # Parent dies in childbirth
+            parent1.is_alive = False
+            if parent2.partner_id == parent1.id:
+                parent2.partner_id = None
+                parent2.relationship_status = "widowed"
 
         # Determine birth order (count living + dead children of this pair)
         shared_children = set(parent1.children_ids) & set(parent2.children_ids)

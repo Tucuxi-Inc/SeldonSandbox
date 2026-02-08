@@ -86,6 +86,7 @@ class ExperimentConfig:
 
     # === Cognitive council ===
     cognitive_council_enabled: bool = False  # Off by default for faster sims
+    cognitive_council_weights: dict[str, list[tuple[str, float]]] | None = None  # None = use defaults
 
     # === Relationships ===
     relationship_config: dict[str, Any] = field(default_factory=lambda: {
