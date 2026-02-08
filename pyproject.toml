@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "seldon-sandbox"
+version = "0.1.0"
+description = "A multi-generational societal simulation engine for exploring personality-driven community dynamics"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Kevin Keller", email = "kevin@tucuxi.com"},
+]
+
+dependencies = [
+    "numpy>=1.24.0",
+    "scipy>=1.10.0",
+    "dataclasses-json>=0.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "hypothesis>=6.0.0",
+]
+viz = [
+    "matplotlib>=3.7.0",
+    "pandas>=2.0.0",
+    "plotly>=5.0.0",
+]
+api = [
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "pydantic>=2.0.0",
+]
+notebooks = [
+    "jupyter>=1.0.0",
+]
+all = [
+    "seldon-sandbox[dev,viz,api,notebooks]",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[tool.coverage.run]
+source = ["seldon"]
+
+[tool.coverage.report]
+show_missing = true
