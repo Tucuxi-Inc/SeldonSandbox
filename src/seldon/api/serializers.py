@@ -72,6 +72,10 @@ def serialize_agent_detail(agent: Agent, trait_system: TraitSystem) -> dict[str,
         "decision_history": agent.decision_history,
         "outsider_origin": agent.outsider_origin,
         "injection_generation": agent.injection_generation,
+        "location_id": agent.location_id,
+        "resource_holdings": dict(agent.resource_holdings),
+        "cultural_memes": list(agent.cultural_memes),
+        "skills": dict(agent.skills),
     }
 
 
@@ -210,4 +214,5 @@ def serialize_metrics(metrics_obj, trait_system: TraitSystem) -> dict[str, Any]:
         "infidelity_events": metrics_obj.infidelity_events,
         "outsiders_injected": metrics_obj.outsiders_injected,
         "dominant_voice_counts": metrics_obj.dominant_voice_counts,
+        "extension_metrics": getattr(metrics_obj, "extension_metrics", {}),
     }

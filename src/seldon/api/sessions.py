@@ -15,6 +15,7 @@ from typing import Any
 from seldon.core.agent import Agent
 from seldon.core.config import ExperimentConfig
 from seldon.core.engine import SimulationEngine
+from seldon.extensions.registry import ExtensionRegistry
 from seldon.metrics.collector import MetricsCollector
 
 
@@ -49,8 +50,15 @@ class SessionManager:
             config = ExperimentConfig()
 
         session_id = uuid.uuid4().hex[:8]
-        engine = SimulationEngine(config)
+        registry = self._build_extensions(config)
+        engine = SimulationEngine(config, extensions=registry)
         engine.population = engine._create_initial_population()
+
+        # Fire on_simulation_start for extensions (run() does this but
+        # we call _create_initial_population directly)
+        for ext in engine.extensions.get_enabled():
+            ext.on_simulation_start(engine.population, config)
+
         collector = MetricsCollector(config)
 
         session = SimulationSession(
@@ -123,9 +131,14 @@ class SessionManager:
         """Reset a session to generation 0."""
         session = self.get_session(session_id)
 
-        # Rebuild engine with same config
-        engine = SimulationEngine(session.config)
+        # Rebuild engine with same config + extensions
+        registry = self._build_extensions(session.config)
+        engine = SimulationEngine(session.config, extensions=registry)
         engine.population = engine._create_initial_population()
+
+        for ext in engine.extensions.get_enabled():
+            ext.on_simulation_start(engine.population, session.config)
+
         collector = MetricsCollector(session.config)
 
         session.engine = engine
@@ -144,6 +157,34 @@ class SessionManager:
         if session_id not in self.sessions:
             raise KeyError(f"Session '{session_id}' not found")
         del self.sessions[session_id]
+
+    @staticmethod
+    def _build_extensions(config: ExperimentConfig) -> ExtensionRegistry:
+        """Build an ExtensionRegistry from config.extensions_enabled."""
+        from seldon.extensions import (
+            GeographyExtension, MigrationExtension, ResourcesExtension,
+            TechnologyExtension, CultureExtension, ConflictExtension,
+        )
+
+        registry = ExtensionRegistry()
+
+        if not config.extensions_enabled:
+            return registry
+
+        # Register all standard extensions
+        geo = GeographyExtension()
+        registry.register(geo)
+        registry.register(MigrationExtension(geo))
+        registry.register(ResourcesExtension())
+        registry.register(TechnologyExtension())
+        registry.register(CultureExtension())
+        registry.register(ConflictExtension())
+
+        # Enable those requested (in order — dependency checked)
+        for name in config.extensions_enabled:
+            registry.enable(name)
+
+        return registry
 
     def list_sessions(self) -> list[dict[str, Any]]:
         """List all sessions as summary dicts."""

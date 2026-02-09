@@ -24,6 +24,11 @@ class AttractionModel:
         self.config = config
         self.ts = config.trait_system
         self.weights = config.attraction_weights
+        self._extension_modifiers: list = []
+
+    def set_extension_modifiers(self, modifiers: list) -> None:
+        """Set extension modifier callbacks for attraction calculation."""
+        self._extension_modifiers = modifiers
 
     def calculate(
         self, agent1: Agent, agent2: Agent,
@@ -49,6 +54,11 @@ class AttractionModel:
             self.weights.get(k, 0.0) * v
             for k, v in components.items()
         )
+        score = float(np.clip(score, 0.0, 1.0))
+
+        # Extension modifier hooks
+        for modifier in self._extension_modifiers:
+            score = modifier(agent1, agent2, score, self.config)
         return float(np.clip(score, 0.0, 1.0))
 
     def _similarity(self, a1: Agent, a2: Agent) -> float:

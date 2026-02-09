@@ -194,6 +194,24 @@ class ExperimentConfig:
     def from_json(cls, s: str) -> ExperimentConfig:
         return cls.from_dict(json.loads(s))
 
+    def enable_extension(
+        self, name: str,
+        config_overrides: dict[str, Any] | None = None,
+    ) -> None:
+        """Enable an extension and optionally set its configuration."""
+        if name not in self.extensions_enabled:
+            self.extensions_enabled.append(name)
+        if name not in self.extensions:
+            self.extensions[name] = {}
+        if config_overrides:
+            self.extensions[name].update(config_overrides)
+
+    def configure_extension(self, name: str, **kwargs: Any) -> None:
+        """Update configuration parameters for a named extension."""
+        if name not in self.extensions:
+            self.extensions[name] = {}
+        self.extensions[name].update(kwargs)
+
     def diff(self, other: ExperimentConfig) -> dict[str, tuple[Any, Any]]:
         """Return parameters that differ between two configs."""
         diffs: dict[str, tuple[Any, Any]] = {}

@@ -74,6 +74,9 @@ class GenerationMetrics:
     # Council voice distribution (if enabled)
     dominant_voice_counts: dict[str, int] = field(default_factory=dict)
 
+    # Extension metrics
+    extension_metrics: dict[str, Any] = field(default_factory=dict)
+
 
 class MetricsCollector:
     """
@@ -152,6 +155,12 @@ class MetricsCollector:
 
         events = snapshot.events
 
+        # Extract extension metrics from events
+        ext_metrics: dict[str, Any] = {}
+        for key, value in events.items():
+            if key.startswith("ext_"):
+                ext_metrics[key[4:]] = value
+
         metrics = GenerationMetrics(
             generation=snapshot.generation,
             population_size=snapshot.population_size,
@@ -182,6 +191,7 @@ class MetricsCollector:
             infidelity_events=events.get("infidelity_events", 0),
             outsiders_injected=events.get("outsiders_injected", 0),
             dominant_voice_counts=voice_counts,
+            extension_metrics=ext_metrics,
         )
 
         # Update tracking state
@@ -230,6 +240,7 @@ class MetricsCollector:
                 "infidelity_events": m.infidelity_events,
                 "outsiders_injected": m.outsiders_injected,
                 "dominant_voice_counts": m.dominant_voice_counts,
+                "extension_metrics": m.extension_metrics,
             }
             result.append(d)
         return result

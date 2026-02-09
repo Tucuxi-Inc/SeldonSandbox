@@ -29,6 +29,7 @@ from seldon.core.drift import TraitDriftEngine
 from seldon.core.inheritance import InheritanceEngine
 from seldon.core.processing import ProcessingClassifier, ProcessingRegion
 from seldon.experiment.outsider import OutsiderInterface, RippleTracker
+from seldon.extensions.registry import ExtensionRegistry
 from seldon.social.fertility import FertilityManager
 from seldon.social.lore import LoreEngine
 from seldon.social.relationships import RelationshipManager
@@ -107,10 +108,16 @@ class SimulationEngine:
     9. Record metrics
     """
 
-    def __init__(self, config: ExperimentConfig):
+    def __init__(
+        self, config: ExperimentConfig,
+        extensions: ExtensionRegistry | None = None,
+    ):
         self.config = config
         self.ts = config.trait_system
         self.rng = np.random.default_rng(config.random_seed)
+
+        # Extensions (empty registry by default — zero behavioral change)
+        self.extensions: ExtensionRegistry = extensions or ExtensionRegistry()
 
         # Core components
         self.inheritance = InheritanceEngine(config)
@@ -127,6 +134,14 @@ class SimulationEngine:
         self.outsider_interface = OutsiderInterface(config, self.classifier)
         self.ripple_tracker = RippleTracker(config)
 
+        # Wire extension modifier hooks into attraction and decision models
+        self.attraction.set_extension_modifiers(
+            [ext.modify_attraction for ext in self.extensions.get_enabled()]
+        )
+        self.decision_model.set_extension_modifiers(
+            [ext.modify_decision for ext in self.extensions.get_enabled()]
+        )
+
         # State
         self.population: list[Agent] = []
         self.history: list[GenerationSnapshot] = []
@@ -137,6 +152,10 @@ class SimulationEngine:
         generations = generations or self.config.generations_to_run
         self.population = self._create_initial_population()
         self.history = []
+
+        # Extension hook: simulation start
+        for ext in self.extensions.get_enabled():
+            ext.on_simulation_start(self.population, self.config)
 
         for gen in range(generations):
             snapshot = self._run_generation(gen)
@@ -174,6 +193,10 @@ class SimulationEngine:
             "dissolutions": 0, "infidelity_events": 0, "outsiders_injected": 0,
             "memories_created": 0, "lore_transmitted": 0,
         }
+
+        # Extension hook: generation start
+        for ext in self.extensions.get_enabled():
+            ext.on_generation_start(generation, self.population, self.config)
 
         # === Phase 1: Age and trait drift ===
         for agent in self.population:
@@ -254,6 +277,10 @@ class SimulationEngine:
                     new_children.append(child)
                     events["births"] += 1
 
+                    # Extension hook: agent created
+                    for ext in self.extensions.get_enabled():
+                        ext.on_agent_created(child, (p1, p2), self.config)
+
                     # Lore transmission
                     if self.config.lore_enabled:
                         lore_count = self._transmit_lore(p1, p2, child)
@@ -287,6 +314,10 @@ class SimulationEngine:
             if not agent.is_alive:
                 continue
             death_rate = self._mortality_rate(agent)
+            # Extension modifier hooks
+            for ext in self.extensions.get_enabled():
+                death_rate = ext.modify_mortality(agent, death_rate, self.config)
+            death_rate = float(np.clip(death_rate, 0.0, 1.0))
             if self.rng.random() < death_rate:
                 agent.is_alive = False
                 events["deaths"] += 1
@@ -299,6 +330,14 @@ class SimulationEngine:
 
         # Remove dead agents
         self.population = [a for a in self.population if a.is_alive]
+
+        # Extension hooks: generation end + metrics
+        for ext in self.extensions.get_enabled():
+            ext.on_generation_end(generation, self.population, self.config)
+        for ext in self.extensions.get_enabled():
+            ext_metrics = ext.get_metrics(self.population)
+            if ext_metrics:
+                events[f"ext_{ext.name}"] = ext_metrics
 
         # === Phase 9: Build snapshot ===
         return self._build_snapshot(generation, events, generation_contributions)

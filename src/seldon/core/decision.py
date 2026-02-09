@@ -71,6 +71,11 @@ class DecisionModel:
         self.config = config
         self.ts = config.trait_system
         self.temperature = config.decision_temperature
+        self._extension_modifiers: list = []
+
+    def set_extension_modifiers(self, modifiers: list) -> None:
+        """Set extension modifier callbacks for decision utilities."""
+        self._extension_modifiers = modifiers
 
     def decide(
         self,
@@ -143,6 +148,10 @@ class DecisionModel:
 
             utilities[action] = utility
             contributions_by_action[action] = contributions
+
+        # Extension modifier hooks (before softmax)
+        for modifier in self._extension_modifiers:
+            utilities = modifier(agent, context.value, utilities, self.config)
 
         # Softmax with temperature
         values = np.array([utilities[a] for a in actions])
