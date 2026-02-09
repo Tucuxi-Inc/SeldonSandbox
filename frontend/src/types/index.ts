@@ -141,3 +141,163 @@ export interface ComparisonResponse {
   sessions: Record<string, SummaryStats>;
   config_diffs: Record<string, Record<string, unknown[]>>;
 }
+
+// === Anomaly Detection ===
+
+export interface Anomaly {
+  generation: number;
+  severity: string;
+  z_score: number;
+  metric: string;
+  value: number;
+  mean: number;
+  std: number;
+  category: string;
+  description: string;
+}
+
+export interface AnomalyReport {
+  anomalies: Anomaly[];
+  generation_scores: number[];
+  thresholds: { warning: number; anomaly: number; critical: number };
+}
+
+// === Lore Evolution ===
+
+export interface LoreMemory {
+  id: string;
+  content: string;
+  memory_type: string;
+  fidelity: number;
+  emotional_valence: number;
+  trait_modifiers: Record<string, number>;
+  created_generation: number;
+  source_agent_id: string | null;
+  transmission_count: number;
+  mutation_count: number;
+}
+
+export interface LoreOverview {
+  time_series: {
+    total_memories: number[];
+    societal_memories: number[];
+    myths_count: number[];
+    generations: number[];
+    mean_fidelity?: number[];
+  };
+  current_societal_lore: LoreMemory[];
+  memory_type_distribution: Record<string, number>;
+}
+
+export interface MemePrevalence {
+  enabled: boolean;
+  memes?: { id: string; name: string; prevalence: number; effects: Record<string, number> }[];
+  prevalence_over_time: Record<string, number[]>;
+  generations?: number[];
+  current_dominant?: string | null;
+}
+
+// === Settlements ===
+
+export interface Settlement {
+  id: string;
+  name: string;
+  coordinates: number[];
+  population: number;
+  carrying_capacity: number;
+  occupancy_ratio: number;
+  resource_richness: number;
+  region_counts: Record<string, number>;
+}
+
+export interface SettlementOverview {
+  enabled: boolean;
+  settlements: Settlement[];
+  total_capacity: number;
+  total_population: number;
+}
+
+export interface ViabilityAssessment {
+  location_id: string;
+  viability_score: number;
+  risk_factors: string[];
+  checks_passed: number;
+  checks_total: number;
+  group_size: number;
+}
+
+export interface MigrationEvent {
+  generation: number;
+  type: string;
+  location_id?: string;
+  founders?: number;
+  count?: number;
+  viability?: number;
+  risks?: string[];
+  from?: string;
+  to?: string;
+}
+
+export interface MigrationHistory {
+  enabled: boolean;
+  events: MigrationEvent[];
+  timeline: {
+    settlement_count_by_gen: number[];
+    migrations_by_gen: number[];
+  };
+}
+
+// === Network ===
+
+export interface NetworkNode {
+  id: string;
+  name: string;
+  region: string;
+  location_id: string | null;
+}
+
+export interface NetworkEdge {
+  source: string;
+  target: string;
+  type: string;
+  strength: number;
+}
+
+export interface NetworkGraph {
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+  stats: {
+    total_nodes: number;
+    total_edges: number;
+    avg_connections: number;
+    connected_components: number;
+  };
+}
+
+// === Sensitivity ===
+
+export interface ParameterSensitivity {
+  parameter: string;
+  correlation: number;
+  impact: number;
+  min_value: number | string;
+  max_value: number | string;
+  min_outcome: number;
+  max_outcome: number;
+}
+
+export interface TornadoBar {
+  parameter: string;
+  low_outcome: number;
+  high_outcome: number;
+  low_value: number | string;
+  high_value: number | string;
+  swing: number;
+}
+
+export interface SensitivityReport {
+  target_metric: string;
+  session_count: number;
+  sensitivities: ParameterSensitivity[];
+  tornado_data: TornadoBar[];
+}

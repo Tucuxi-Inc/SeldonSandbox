@@ -23,3 +23,29 @@ export const REGION_ORDER = [
 ];
 
 export const API_BASE = '/api';
+
+export const ANOMALY_COLORS: Record<string, string> = {
+  normal: '#10B981',
+  warning: '#F59E0B',
+  medium: '#F97316',
+  high: '#EF4444',
+  critical: '#DC2626',
+};
+
+export const MEMORY_TYPE_COLORS: Record<string, string> = {
+  personal: '#3B82F6',
+  family: '#8B5CF6',
+  societal: '#F59E0B',
+  myth: '#EF4444',
+};
+
+export const EDGE_TYPE_COLORS: Record<string, string> = {
+  partner: '#EF4444',
+  social: '#3B82F6',
+  parent: '#10B981',
+};
+
+export const SENSITIVITY_COLORS = {
+  positive: '#3B82F6',
+  negative: '#EF4444',
+};

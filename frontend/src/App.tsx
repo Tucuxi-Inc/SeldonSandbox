@@ -7,6 +7,11 @@ import { SufferingView } from './components/views/suffering/SufferingView';
 import { AgentExplorerView } from './components/views/agent-explorer/AgentExplorerView';
 import { ExperimentView } from './components/views/experiment/ExperimentView';
 import { LineageView } from './components/views/lineage/LineageView';
+import { SettlementDiagnosticsView } from './components/views/settlements/SettlementDiagnosticsView';
+import { NetworkView } from './components/views/network/NetworkView';
+import { LoreEvolutionView } from './components/views/lore/LoreEvolutionView';
+import { AnomalyDetectionView } from './components/views/anomaly/AnomalyDetectionView';
+import { ParameterSensitivityView } from './components/views/sensitivity/ParameterSensitivityView';
 import { useSimulationStore } from './stores/simulation';
 import { usePolling } from './hooks/useSimulation';
 
@@ -27,6 +32,11 @@ function AppContent() {
         <Route path="/agents" element={<AgentExplorerView />} />
         <Route path="/experiments" element={<ExperimentView />} />
         <Route path="/lineage" element={<LineageView />} />
+        <Route path="/settlements" element={<SettlementDiagnosticsView />} />
+        <Route path="/network" element={<NetworkView />} />
+        <Route path="/lore" element={<LoreEvolutionView />} />
+        <Route path="/anomalies" element={<AnomalyDetectionView />} />
+        <Route path="/sensitivity" element={<ParameterSensitivityView />} />
       </Route>
     </Routes>
   );

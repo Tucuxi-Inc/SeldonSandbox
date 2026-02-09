@@ -13,6 +13,14 @@ import type {
   ArchetypeDetail,
   ComparisonResponse,
   AgentSummary,
+  AnomalyReport,
+  LoreOverview,
+  MemePrevalence,
+  SettlementOverview,
+  ViabilityAssessment,
+  MigrationHistory,
+  NetworkGraph,
+  SensitivityReport,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -151,5 +159,74 @@ export async function injectOutsider(params: {
 
 export async function getRippleReport(sessionId: string): Promise<Record<string, unknown>> {
   const { data } = await api.get(`/experiments/${sessionId}/ripple`);
+  return data;
+}
+
+// === Advanced (Anomaly, Lore, Sensitivity) ===
+
+export async function getAnomalies(sessionId: string): Promise<AnomalyReport> {
+  const { data } = await api.get(`/advanced/${sessionId}/anomalies`);
+  return data;
+}
+
+export async function getLoreOverview(sessionId: string): Promise<LoreOverview> {
+  const { data } = await api.get(`/advanced/${sessionId}/lore/overview`);
+  return data;
+}
+
+export async function getMemePrevalence(sessionId: string): Promise<MemePrevalence> {
+  const { data } = await api.get(`/advanced/${sessionId}/lore/meme-prevalence`);
+  return data;
+}
+
+export async function computeSensitivity(
+  sessionId: string,
+  sessionIds: string[],
+  targetMetric: string,
+): Promise<SensitivityReport> {
+  const { data } = await api.post(`/advanced/${sessionId}/sensitivity`, {
+    session_ids: sessionIds,
+    target_metric: targetMetric,
+  });
+  return data;
+}
+
+// === Settlements ===
+
+export async function getSettlementsOverview(sessionId: string): Promise<SettlementOverview> {
+  const { data } = await api.get(`/settlements/${sessionId}/overview`);
+  return data;
+}
+
+export async function getSettlementViability(
+  sessionId: string,
+  locationId: string,
+): Promise<ViabilityAssessment> {
+  const { data } = await api.get(`/settlements/${sessionId}/viability/${locationId}`);
+  return data;
+}
+
+export async function getMigrationHistory(sessionId: string): Promise<MigrationHistory> {
+  const { data } = await api.get(`/settlements/${sessionId}/migration-history`);
+  return data;
+}
+
+export async function getSettlementComposition(
+  sessionId: string,
+  locationId: string,
+): Promise<Record<string, unknown>> {
+  const { data } = await api.get(`/settlements/${sessionId}/settlement-composition/${locationId}`);
+  return data;
+}
+
+// === Network ===
+
+export async function getNetworkGraph(
+  sessionId: string,
+  bondThreshold: number = 0.1,
+): Promise<NetworkGraph> {
+  const { data } = await api.get(`/network/${sessionId}/graph`, {
+    params: { bond_threshold: bondThreshold },
+  });
   return data;
 }

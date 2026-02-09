@@ -138,3 +138,10 @@ class InjectRequest(BaseModel):
     archetype: str | None = None
     custom_traits: dict[str, float] | None = None
     noise_sigma: float = 0.05
+
+
+# === Sensitivity ===
+
+class SensitivityRequest(BaseModel):
+    session_ids: list[str]
+    target_metric: str = "mean_contribution"
