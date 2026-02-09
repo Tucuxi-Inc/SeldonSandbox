@@ -2,11 +2,20 @@
 FastAPI application factory for the Seldon Sandbox API.
 """
 
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from seldon.api.sessions import SessionManager
-from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced, llm
+from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced, llm, social, communities, economics, environment, genetics
+
+# Load .env — try project root first, then CWD (handles Docker volume mount)
+_project_root = Path(__file__).resolve().parents[3]  # src/seldon/api/app.py → project root
+load_dotenv(_project_root / ".env")
+load_dotenv(Path.cwd() / ".env")  # fallback for Docker /app/.env
 
 
 def create_app() -> FastAPI:
@@ -14,7 +23,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="Seldon Sandbox API",
         description="REST API for the Seldon Sandbox simulation engine",
-        version="0.5.0",
+        version="0.6.0",
     )
 
     application.add_middleware(
@@ -35,6 +44,11 @@ def create_app() -> FastAPI:
     application.include_router(network.router, prefix="/api/network", tags=["network"])
     application.include_router(advanced.router, prefix="/api/advanced", tags=["advanced"])
     application.include_router(llm.router, prefix="/api/llm", tags=["llm"])
+    application.include_router(social.router, prefix="/api/social", tags=["social"])
+    application.include_router(communities.router, prefix="/api/communities", tags=["communities"])
+    application.include_router(economics.router, prefix="/api/economics", tags=["economics"])
+    application.include_router(environment.router, prefix="/api/environment", tags=["environment"])
+    application.include_router(genetics.router, prefix="/api/genetics", tags=["genetics"])
 
     @application.get("/api/health")
     def health_check():

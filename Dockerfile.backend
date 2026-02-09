@@ -4,8 +4,9 @@ WORKDIR /app
 
 COPY pyproject.toml ./
 COPY src/ ./src/
+COPY tests/ ./tests/
 
-RUN pip install --no-cache-dir -e ".[api]"
+RUN pip install --no-cache-dir -e ".[api,dev]"
 
 EXPOSE 8006
 

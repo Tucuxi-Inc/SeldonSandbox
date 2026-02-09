@@ -124,6 +124,15 @@ def compare_sessions(req: CompareRequest, request: Request):
     }
 
 
+@router.get("/trait-names")
+def get_trait_names(request: Request) -> list[str]:
+    """Return ordered list of trait names from the default trait system."""
+    from seldon.core.traits import TraitSystem
+    from seldon.core.config import ExperimentConfig
+    ts = ExperimentConfig().trait_system
+    return ts.names()
+
+
 @router.post("/inject-outsider")
 def inject_outsider(req: InjectRequest, request: Request) -> dict[str, Any]:
     mgr = request.app.state.session_manager
@@ -134,11 +143,12 @@ def inject_outsider(req: InjectRequest, request: Request) -> dict[str, Any]:
 
     engine = session.engine
     ts = session.config.trait_system
+    gen = req.injection_generation if req.injection_generation is not None else session.current_generation
 
     if req.archetype:
         agent = engine.outsider_interface.inject_archetype(
             req.archetype,
-            session.current_generation,
+            gen,
             noise_sigma=req.noise_sigma,
             rng=engine.rng,
         )
@@ -151,10 +161,18 @@ def inject_outsider(req: InjectRequest, request: Request) -> dict[str, Any]:
             except KeyError:
                 pass
         agent = engine.outsider_interface.inject_outsider(
-            traits, session.current_generation, origin="api_injection",
+            traits, gen, origin="api_custom",
         )
     else:
         raise HTTPException(status_code=400, detail="Must provide archetype or custom_traits")
+
+    # Apply optional overrides
+    if req.name:
+        agent.name = req.name
+    if req.gender:
+        agent.gender = req.gender
+    if req.age is not None:
+        agent.age = req.age
 
     engine.population.append(agent)
     session.all_agents[agent.id] = agent
@@ -166,6 +184,77 @@ def inject_outsider(req: InjectRequest, request: Request) -> dict[str, Any]:
             break
 
     return serialize_agent_summary(agent, ts)
+
+
+@router.get("/{session_id}/outsiders")
+def get_outsiders(session_id: str, request: Request) -> list[dict[str, Any]]:
+    """Return all outsider agents in a session."""
+    mgr = request.app.state.session_manager
+    try:
+        session = mgr.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+    ts = session.config.trait_system
+    outsiders = [
+        a for a in session.all_agents.values() if a.is_outsider
+    ]
+    return [serialize_agent_summary(a, ts) for a in outsiders]
+
+
+@router.get("/{session_id}/outsiders/{agent_id}/impact")
+def get_outsider_impact(
+    session_id: str, agent_id: str, request: Request,
+) -> dict[str, Any]:
+    """Return impact data for a specific outsider."""
+    mgr = request.app.state.session_manager
+    try:
+        session = mgr.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+    if agent_id not in session.all_agents:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+
+    agent = session.all_agents[agent_id]
+    if not agent.is_outsider:
+        raise HTTPException(status_code=400, detail="Agent is not an outsider")
+
+    ts = session.config.trait_system
+
+    # Collect descendants recursively
+    def _collect_descendants(aid: str) -> list[str]:
+        a = session.all_agents.get(aid)
+        if not a:
+            return []
+        result = []
+        for cid in a.children_ids:
+            result.append(cid)
+            result.extend(_collect_descendants(cid))
+        return result
+
+    descendant_ids = _collect_descendants(agent_id)
+    descendants = [
+        serialize_agent_summary(session.all_agents[d], ts)
+        for d in descendant_ids if d in session.all_agents
+    ]
+
+    # Compute trait distance from population mean
+    pop_traits = np.array([a.traits for a in session.engine.population if a.is_alive])
+    trait_distance = 0.0
+    if len(pop_traits) > 0 and agent.is_alive:
+        pop_mean = pop_traits.mean(axis=0)
+        trait_distance = float(np.linalg.norm(agent.traits - pop_mean))
+
+    return {
+        "agent": serialize_agent_summary(agent, ts),
+        "descendant_count": len(descendant_ids),
+        "descendants": descendants,
+        "trait_distance_from_mean": round(trait_distance, 4),
+        "injection_generation": agent.injection_generation,
+        "outsider_origin": agent.outsider_origin,
+        "gender": agent.gender,
+    }
 
 
 @router.get("/{session_id}/ripple")

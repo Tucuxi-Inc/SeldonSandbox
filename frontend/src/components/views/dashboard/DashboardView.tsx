@@ -18,12 +18,31 @@ export function DashboardView() {
     lore_enabled: true,
     cognitive_council_enabled: false,
   });
-  const [injectionArchetype, setInjectionArchetype] = useState('');
   const [stepping, setStepping] = useState(false);
+
+  // Outsider builder state
+  const [outsiderMode, setOutsiderMode] = useState<'archetype' | 'custom'>('archetype');
+  const [injectionArchetype, setInjectionArchetype] = useState('');
+  const [outsiderName, setOutsiderName] = useState('');
+  const [outsiderGender, setOutsiderGender] = useState('');
+  const [outsiderAge, setOutsiderAge] = useState(25);
+  const [outsiderNoiseSigma, setOutsiderNoiseSigma] = useState(0.05);
+  const [outsiderInjectionGen, setOutsiderInjectionGen] = useState<number | ''>('');
+  const [customTraits, setCustomTraits] = useState<Record<string, number>>({});
+  const [traitNames, setTraitNames] = useState<string[]>([]);
+
+  // Collapsible config sections
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     api.getPresets().then(setPresets).catch(() => {});
     api.getArchetypes().then(setArchetypes).catch(() => {});
+    api.getTraitNames().then((names) => {
+      setTraitNames(names);
+      const initial: Record<string, number> = {};
+      names.forEach((n) => { initial[n] = 0.5; });
+      setCustomTraits(initial);
+    }).catch(() => {});
   }, []);
 
   const defaults: Record<string, unknown> = {
@@ -74,16 +93,61 @@ export function DashboardView() {
   };
 
   const handleInject = async () => {
-    if (!activeSessionId || !injectionArchetype) return;
-    await api.injectOutsider({
-      session_id: activeSessionId,
-      archetype: injectionArchetype,
-    });
+    if (!activeSessionId) return;
+    const gen = outsiderInjectionGen === '' ? undefined : outsiderInjectionGen;
+    if (outsiderMode === 'archetype') {
+      if (!injectionArchetype) return;
+      await api.injectOutsider({
+        session_id: activeSessionId,
+        archetype: injectionArchetype,
+        noise_sigma: outsiderNoiseSigma,
+        name: outsiderName || undefined,
+        injection_generation: gen,
+      });
+    } else {
+      await api.injectOutsider({
+        session_id: activeSessionId,
+        custom_traits: customTraits,
+        name: outsiderName || undefined,
+        gender: outsiderGender || undefined,
+        age: outsiderAge,
+        injection_generation: gen,
+      });
+    }
     await refreshAll();
   };
 
   const updateConfig = (key: string, value: unknown) => {
     setConfig({ ...config, [key]: value });
+  };
+
+  const updateNestedConfig = (section: string, key: string, value: unknown) => {
+    const current = (config[section] as Record<string, unknown>) ?? {};
+    setConfig({ ...config, [section]: { ...current, [key]: value } });
+  };
+
+  const toggleExtension = (name: string, enabled: boolean, deps?: string[], dependents?: string[]) => {
+    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+    if (enabled) {
+      if (!current.includes(name)) current.push(name);
+      // Auto-enable dependencies
+      deps?.forEach((d) => { if (!current.includes(d)) current.push(d); });
+    } else {
+      const idx = current.indexOf(name);
+      if (idx >= 0) current.splice(idx, 1);
+      // Auto-disable dependents
+      dependents?.forEach((d) => {
+        const dIdx = current.indexOf(d);
+        if (dIdx >= 0) current.splice(dIdx, 1);
+      });
+    }
+    updateConfig('extensions_enabled', current);
+  };
+
+  const isExtEnabled = (name: string) => ((config.extensions_enabled as string[]) ?? []).includes(name);
+
+  const toggleSection = (section: string) => {
+    setExpandedSections((prev) => ({ ...prev, [section]: !prev[section] }));
   };
 
   return (
@@ -116,7 +180,7 @@ export function DashboardView() {
               <SliderField label="Population" value={config.initial_population as number} min={10} max={500} step={10} onChange={(v) => updateConfig('initial_population', v)} />
               <SliderField label="Generations" value={config.generations_to_run as number} min={5} max={200} step={5} onChange={(v) => updateConfig('generations_to_run', v)} />
               <SliderField label="Trait Drift Rate" value={config.trait_drift_rate as number} min={0} max={0.5} step={0.01} onChange={(v) => updateConfig('trait_drift_rate', v)} />
-              <SliderField label="Random Seed" value={config.random_seed as number} min={0} max={9999} step={1} onChange={(v) => updateConfig('random_seed', v)} />
+              <SliderField label="Random Seed" value={config.random_seed as number} min={1} max={9999} step={1} onChange={(v) => updateConfig('random_seed', v)} />
             </div>
 
             <div className="mt-4 flex items-center gap-4">
@@ -130,80 +194,118 @@ export function DashboardView() {
               <div className="flex flex-wrap items-center gap-4">
                 <ToggleField
                   label="Geography"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('geography')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v) {
-                      if (!current.includes('geography')) current.push('geography');
-                    } else {
-                      const idx = current.indexOf('geography');
-                      if (idx >= 0) current.splice(idx, 1);
-                      // Disabling geography also disables migration
-                      const mIdx = current.indexOf('migration');
-                      if (mIdx >= 0) current.splice(mIdx, 1);
-                    }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('geography')}
+                  onChange={(v) => toggleExtension('geography', v, [], ['migration', 'diplomacy', 'environment'])}
                 />
                 <ToggleField
                   label="Migration"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('migration')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v) {
-                      if (!current.includes('migration')) current.push('migration');
-                      // Migration requires geography
-                      if (!current.includes('geography')) current.push('geography');
-                    } else {
-                      const idx = current.indexOf('migration');
-                      if (idx >= 0) current.splice(idx, 1);
-                    }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('migration')}
+                  onChange={(v) => toggleExtension('migration', v, ['geography'])}
                 />
                 <ToggleField
                   label="Resources"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('resources')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v && !current.includes('resources')) current.push('resources');
-                    if (!v) { const idx = current.indexOf('resources'); if (idx >= 0) current.splice(idx, 1); }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('resources')}
+                  onChange={(v) => toggleExtension('resources', v)}
                 />
                 <ToggleField
                   label="Technology"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('technology')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v && !current.includes('technology')) current.push('technology');
-                    if (!v) { const idx = current.indexOf('technology'); if (idx >= 0) current.splice(idx, 1); }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('technology')}
+                  onChange={(v) => toggleExtension('technology', v)}
                 />
                 <ToggleField
                   label="Culture"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('culture')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v && !current.includes('culture')) current.push('culture');
-                    if (!v) { const idx = current.indexOf('culture'); if (idx >= 0) current.splice(idx, 1); }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('culture')}
+                  onChange={(v) => toggleExtension('culture', v)}
                 />
                 <ToggleField
                   label="Conflict"
-                  value={((config.extensions_enabled as string[]) ?? []).includes('conflict')}
-                  onChange={(v) => {
-                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
-                    if (v && !current.includes('conflict')) current.push('conflict');
-                    if (!v) { const idx = current.indexOf('conflict'); if (idx >= 0) current.splice(idx, 1); }
-                    updateConfig('extensions_enabled', current);
-                  }}
+                  value={isExtEnabled('conflict')}
+                  onChange={(v) => toggleExtension('conflict', v)}
+                />
+                <ToggleField
+                  label="Social Dynamics"
+                  value={isExtEnabled('social_dynamics')}
+                  onChange={(v) => toggleExtension('social_dynamics', v)}
+                />
+                <ToggleField
+                  label="Diplomacy"
+                  value={isExtEnabled('diplomacy')}
+                  onChange={(v) => toggleExtension('diplomacy', v, ['geography'])}
+                />
+                <ToggleField
+                  label="Economics"
+                  value={isExtEnabled('economics')}
+                  onChange={(v) => toggleExtension('economics', v)}
+                />
+                <ToggleField
+                  label="Environment"
+                  value={isExtEnabled('environment')}
+                  onChange={(v) => toggleExtension('environment', v, ['geography'])}
                 />
               </div>
             </div>
           </div>
+
+          {/* Collapsible Config Sections */}
+          <CollapsibleSection title="Genetics & Epigenetics" expanded={!!expandedSections['genetics']} onToggle={() => toggleSection('genetics')}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 flex items-center gap-4">
+                <ToggleField label="Genetics Enabled" value={!!((config.genetics_config as Record<string, unknown>)?.genetics_enabled)} onChange={(v) => updateNestedConfig('genetics_config', 'genetics_enabled', v)} />
+                <ToggleField label="Epigenetics Enabled" value={!!((config.epigenetics_config as Record<string, unknown>)?.epigenetics_enabled)} onChange={(v) => updateNestedConfig('epigenetics_config', 'epigenetics_enabled', v)} />
+              </div>
+              <SliderField label="Mutation Rate" value={((config.genetics_config as Record<string, unknown>)?.mutation_rate as number) ?? 0.001} min={0} max={0.01} step={0.001} onChange={(v) => updateNestedConfig('genetics_config', 'mutation_rate', v)} />
+              <SliderField label="Gene-Trait Influence" value={((config.genetics_config as Record<string, unknown>)?.gene_trait_influence as number) ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('genetics_config', 'gene_trait_influence', v)} />
+              <SliderField label="Transgenerational Rate" value={((config.epigenetics_config as Record<string, unknown>)?.transgenerational_rate as number) ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('epigenetics_config', 'transgenerational_rate', v)} />
+            </div>
+          </CollapsibleSection>
+
+          {isExtEnabled('social_dynamics') && (
+            <CollapsibleSection title="Social Dynamics" expanded={!!expandedSections['social']} onToggle={() => toggleSection('social')}>
+              <div className="grid grid-cols-2 gap-4">
+                <SliderField label="Status Contribution Weight" value={((config.hierarchy_config as Record<string, unknown>)?.contribution_weight as number) ?? 0.4} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('hierarchy_config', 'contribution_weight', v)} />
+                <SliderField label="Status Age Weight" value={((config.hierarchy_config as Record<string, unknown>)?.age_weight as number) ?? 0.2} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('hierarchy_config', 'age_weight', v)} />
+                <SliderField label="Influence Decay Rate" value={((config.hierarchy_config as Record<string, unknown>)?.influence_decay as number) ?? 0.1} min={0} max={0.5} step={0.05} onChange={(v) => updateNestedConfig('hierarchy_config', 'influence_decay', v)} />
+                <div className="col-span-2 flex items-center gap-4">
+                  <ToggleField label="Mentorship Enabled" value={((config.mentorship_config as Record<string, unknown>)?.enabled as boolean) ?? true} onChange={(v) => updateNestedConfig('mentorship_config', 'enabled', v)} />
+                </div>
+                <SliderField label="Max Mentees" value={((config.mentorship_config as Record<string, unknown>)?.max_mentees as number) ?? 3} min={1} max={10} step={1} onChange={(v) => updateNestedConfig('mentorship_config', 'max_mentees', v)} />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {isExtEnabled('diplomacy') && (
+            <CollapsibleSection title="Diplomacy" expanded={!!expandedSections['diplomacy']} onToggle={() => toggleSection('diplomacy')}>
+              <div className="grid grid-cols-2 gap-4">
+                <SliderField label="Alliance Threshold" value={((config.diplomacy_config as Record<string, unknown>)?.alliance_threshold as number) ?? 0.6} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('diplomacy_config', 'alliance_threshold', v)} />
+                <SliderField label="Rivalry Threshold" value={((config.diplomacy_config as Record<string, unknown>)?.rivalry_threshold as number) ?? -0.4} min={-1} max={0} step={0.05} onChange={(v) => updateNestedConfig('diplomacy_config', 'rivalry_threshold', v)} />
+                <SliderField label="Cultural Exchange Rate" value={((config.diplomacy_config as Record<string, unknown>)?.cultural_exchange_rate as number) ?? 0.1} min={0} max={0.5} step={0.05} onChange={(v) => updateNestedConfig('diplomacy_config', 'cultural_exchange_rate', v)} />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {isExtEnabled('economics') && (
+            <CollapsibleSection title="Economics" expanded={!!expandedSections['economics']} onToggle={() => toggleSection('economics')}>
+              <div className="grid grid-cols-2 gap-4">
+                <SliderField label="Base Production Rate" value={((config.economics_config as Record<string, unknown>)?.base_production_rate as number) ?? 1.0} min={0.1} max={5} step={0.1} onChange={(v) => updateNestedConfig('economics_config', 'base_production_rate', v)} />
+                <SliderField label="Trade Distance Cost" value={((config.economics_config as Record<string, unknown>)?.trade_distance_cost as number) ?? 0.1} min={0} max={0.5} step={0.05} onChange={(v) => updateNestedConfig('economics_config', 'trade_distance_cost', v)} />
+                <SliderField label="Poverty Threshold" value={((config.economics_config as Record<string, unknown>)?.poverty_threshold as number) ?? 0.2} min={0} max={1} step={0.05} onChange={(v) => updateNestedConfig('economics_config', 'poverty_threshold', v)} />
+              </div>
+            </CollapsibleSection>
+          )}
+
+          {isExtEnabled('environment') && (
+            <CollapsibleSection title="Environment" expanded={!!expandedSections['environment']} onToggle={() => toggleSection('environment')}>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                  <ToggleField label="Seasons Enabled" value={((config.environment_config as Record<string, unknown>)?.seasons_enabled as boolean) ?? true} onChange={(v) => updateNestedConfig('environment_config', 'seasons_enabled', v)} />
+                </div>
+                <SliderField label="Season Length" value={((config.environment_config as Record<string, unknown>)?.season_length as number) ?? 5} min={1} max={20} step={1} onChange={(v) => updateNestedConfig('environment_config', 'season_length', v)} />
+                <SliderField label="Drought Probability" value={((config.environment_config as Record<string, unknown>)?.drought_probability as number) ?? 0.05} min={0} max={0.5} step={0.01} onChange={(v) => updateNestedConfig('environment_config', 'drought_probability', v)} />
+                <SliderField label="Plague Probability" value={((config.environment_config as Record<string, unknown>)?.plague_probability as number) ?? 0.02} min={0} max={0.5} step={0.01} onChange={(v) => updateNestedConfig('environment_config', 'plague_probability', v)} />
+                <SliderField label="Climate Drift Rate" value={((config.environment_config as Record<string, unknown>)?.climate_drift_rate as number) ?? 0.001} min={0} max={0.01} step={0.001} onChange={(v) => updateNestedConfig('environment_config', 'climate_drift_rate', v)} />
+              </div>
+            </CollapsibleSection>
+          )}
 
           {/* Simulation Controls */}
           <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
@@ -267,25 +369,98 @@ export function DashboardView() {
             </div>
           )}
 
-          {/* Outsider Injection */}
+          {/* Outsider Builder */}
           <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-            <h2 className="mb-3 text-lg font-semibold text-gray-200">Inject Outsider</h2>
-            <select
-              className="mb-2 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200"
-              value={injectionArchetype}
-              onChange={(e) => setInjectionArchetype(e.target.value)}
-            >
-              <option value="">Select archetype...</option>
-              {archetypes.map((a) => (
-                <option key={a.name} value={a.name}>{a.display_name}</option>
-              ))}
-            </select>
+            <h2 className="mb-3 text-lg font-semibold text-gray-200">Outsider Builder</h2>
+
+            {/* Mode Tabs */}
+            <div className="mb-3 flex rounded-md border border-gray-700 overflow-hidden">
+              <button
+                className={`flex-1 py-1.5 text-xs font-medium ${outsiderMode === 'archetype' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setOutsiderMode('archetype')}
+              >
+                Archetype
+              </button>
+              <button
+                className={`flex-1 py-1.5 text-xs font-medium ${outsiderMode === 'custom' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-gray-200'}`}
+                onClick={() => setOutsiderMode('custom')}
+              >
+                Custom Build
+              </button>
+            </div>
+
+            {/* Common fields */}
+            <div className="mb-2">
+              <label className="mb-1 block text-xs text-gray-500">Name (optional)</label>
+              <input
+                type="text"
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200"
+                value={outsiderName}
+                onChange={(e) => setOutsiderName(e.target.value)}
+                placeholder="Auto-generated if empty"
+              />
+            </div>
+            <div className="mb-2">
+              <label className="mb-1 block text-xs text-gray-500">Injection Generation</label>
+              <input
+                type="number"
+                className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200"
+                value={outsiderInjectionGen}
+                onChange={(e) => setOutsiderInjectionGen(e.target.value === '' ? '' : Number(e.target.value))}
+                placeholder={`Current (${active?.current_generation ?? 0})`}
+              />
+            </div>
+
+            {outsiderMode === 'archetype' ? (
+              <>
+                <select
+                  className="mb-2 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200"
+                  value={injectionArchetype}
+                  onChange={(e) => setInjectionArchetype(e.target.value)}
+                >
+                  <option value="">Select archetype...</option>
+                  {archetypes.map((a) => (
+                    <option key={a.name} value={a.name}>{a.display_name}</option>
+                  ))}
+                </select>
+                <SliderField label="Noise Sigma" value={outsiderNoiseSigma} min={0} max={0.3} step={0.01} onChange={setOutsiderNoiseSigma} />
+              </>
+            ) : (
+              <>
+                <div className="mb-2">
+                  <label className="mb-1 block text-xs text-gray-500">Gender</label>
+                  <select
+                    className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-gray-200"
+                    value={outsiderGender}
+                    onChange={(e) => setOutsiderGender(e.target.value)}
+                  >
+                    <option value="">Unspecified</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="non-binary">Non-binary</option>
+                  </select>
+                </div>
+                <SliderField label="Age" value={outsiderAge} min={15} max={60} step={1} onChange={setOutsiderAge} />
+                <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                  <div className="text-xs text-gray-500 mb-1">Trait Sliders</div>
+                  {traitNames.map((name) => (
+                    <MiniSlider
+                      key={name}
+                      label={name}
+                      value={customTraits[name] ?? 0.5}
+                      onChange={(v) => setCustomTraits({ ...customTraits, [name]: v })}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+
             <button
               onClick={handleInject}
-              disabled={!activeSessionId || !injectionArchetype}
-              className="w-full rounded-md bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-40"
+              disabled={!activeSessionId || (outsiderMode === 'archetype' && !injectionArchetype)}
+              className="mt-3 w-full rounded-md bg-amber-700 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 disabled:opacity-40"
             >
-              Inject
+              Inject Outsider
             </button>
           </div>
 
@@ -312,6 +487,23 @@ export function DashboardView() {
   );
 }
 
+function CollapsibleSection({ title, expanded, onToggle, children }: {
+  title: string; expanded: boolean; onToggle: () => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-900">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center justify-between p-4 text-left"
+      >
+        <h2 className="text-sm font-semibold text-gray-200">{title}</h2>
+        <span className="text-gray-500 text-xs">{expanded ? 'Collapse' : 'Expand'}</span>
+      </button>
+      {expanded && <div className="border-t border-gray-800 p-4">{children}</div>}
+    </div>
+  );
+}
+
 function SliderField({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step: number;
   onChange: (v: number) => void;
@@ -329,6 +521,23 @@ function SliderField({ label, value, min, max, step, onChange }: {
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-1 w-full accent-blue-600"
       />
+    </div>
+  );
+}
+
+function MiniSlider({ label, value, onChange }: {
+  label: string; value: number; onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-28 truncate text-xs text-gray-500">{label}</span>
+      <input
+        type="range"
+        min={0} max={1} step={0.05} value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 accent-blue-600"
+      />
+      <span className="w-8 text-right font-mono text-xs text-gray-400">{value.toFixed(2)}</span>
     </div>
   );
 }

@@ -8,6 +8,10 @@ from seldon.extensions.resources import ResourcesExtension
 from seldon.extensions.technology import TechnologyExtension
 from seldon.extensions.culture import CultureExtension
 from seldon.extensions.conflict import ConflictExtension
+from seldon.extensions.social_dynamics import SocialDynamicsExtension
+from seldon.extensions.diplomacy import DiplomacyExtension
+from seldon.extensions.economics import EconomicsExtension
+from seldon.extensions.environment import EnvironmentExtension
 
 __all__ = [
     "SimulationExtension",
@@ -19,4 +23,8 @@ __all__ = [
     "TechnologyExtension",
     "CultureExtension",
     "ConflictExtension",
+    "SocialDynamicsExtension",
+    "DiplomacyExtension",
+    "EconomicsExtension",
+    "EnvironmentExtension",
 ]

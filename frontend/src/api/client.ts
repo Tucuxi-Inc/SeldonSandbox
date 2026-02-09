@@ -25,6 +25,22 @@ import type {
   InterviewResponse,
   NarrativeResponse,
   DecisionExplainResponse,
+  OutsiderImpact,
+  CommunityOverview,
+  EconomicsOverview,
+  TradeRoute,
+  WealthDistribution,
+  OccupationBreakdown,
+  ClimateState,
+  EnvironmentEvent,
+  DiseaseInfo,
+  HierarchyOverview,
+  RoleBreakdown,
+  InfluenceEntry,
+  MentorshipChain,
+  AlleleFrequencies,
+  EpigeneticPrevalence,
+  TraitGeneCorrelation,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -156,6 +172,10 @@ export async function injectOutsider(params: {
   archetype?: string;
   custom_traits?: Record<string, number>;
   noise_sigma?: number;
+  name?: string;
+  gender?: string;
+  age?: number;
+  injection_generation?: number;
 }): Promise<AgentSummary> {
   const { data } = await api.post('/experiments/inject-outsider', params);
   return data;
@@ -242,6 +262,31 @@ export async function getLLMStatus(): Promise<LLMStatus> {
   return data;
 }
 
+export async function setLLMApiKey(apiKey: string): Promise<{ status: string; message: string }> {
+  const { data } = await api.post('/llm/api-key', { api_key: apiKey });
+  return data;
+}
+
+export async function clearLLMApiKey(): Promise<{ status: string; message: string }> {
+  const { data } = await api.delete('/llm/api-key');
+  return data;
+}
+
+export async function setOllamaUrl(baseUrl: string): Promise<{ status: string; message: string; base_url?: string }> {
+  const { data } = await api.post('/llm/ollama-url', { base_url: baseUrl });
+  return data;
+}
+
+export async function testLLMConnection(params: {
+  provider: string;
+  model?: string;
+  api_key?: string;
+  ollama_base_url?: string;
+}): Promise<{ success: boolean; message: string; models?: string[]; base_url?: string }> {
+  const { data } = await api.post('/llm/test-connection', params);
+  return data;
+}
+
 export async function interviewAgent(
   sessionId: string,
   agentId: string,
@@ -284,5 +329,112 @@ export async function explainDecision(
     provider,
     model: model || undefined,
   });
+  return data;
+}
+
+// === Experiments: Trait Names & Outsiders ===
+
+export async function getTraitNames(): Promise<string[]> {
+  const { data } = await api.get('/experiments/trait-names');
+  return data;
+}
+
+export async function getOutsiders(sessionId: string): Promise<AgentSummary[]> {
+  const { data } = await api.get(`/experiments/${sessionId}/outsiders`);
+  return data;
+}
+
+export async function getOutsiderImpact(sessionId: string, agentId: string): Promise<OutsiderImpact> {
+  const { data } = await api.get(`/experiments/${sessionId}/outsiders/${agentId}/impact`);
+  return data;
+}
+
+// === Communities ===
+
+export async function getCommunities(sessionId: string): Promise<CommunityOverview> {
+  const { data } = await api.get(`/communities/${sessionId}/communities`);
+  return data;
+}
+
+export async function getDiplomacy(sessionId: string): Promise<Record<string, unknown>> {
+  const { data } = await api.get(`/communities/${sessionId}/diplomacy`);
+  return data;
+}
+
+// === Economics ===
+
+export async function getEconomicsOverview(sessionId: string): Promise<EconomicsOverview> {
+  const { data } = await api.get(`/economics/${sessionId}/overview`);
+  return data;
+}
+
+export async function getTradeRoutes(sessionId: string): Promise<{ enabled: boolean; routes: TradeRoute[] }> {
+  const { data } = await api.get(`/economics/${sessionId}/trade-routes`);
+  return data;
+}
+
+export async function getWealthDistribution(sessionId: string): Promise<WealthDistribution> {
+  const { data } = await api.get(`/economics/${sessionId}/wealth-distribution`);
+  return data;
+}
+
+export async function getOccupations(sessionId: string): Promise<OccupationBreakdown> {
+  const { data } = await api.get(`/economics/${sessionId}/occupations`);
+  return data;
+}
+
+// === Environment ===
+
+export async function getClimate(sessionId: string): Promise<ClimateState> {
+  const { data } = await api.get(`/environment/${sessionId}/climate`);
+  return data;
+}
+
+export async function getEnvironmentEvents(sessionId: string): Promise<{ enabled: boolean; events: EnvironmentEvent[] }> {
+  const { data } = await api.get(`/environment/${sessionId}/events`);
+  return data;
+}
+
+export async function getDiseases(sessionId: string): Promise<{ enabled: boolean; diseases: DiseaseInfo[] }> {
+  const { data } = await api.get(`/environment/${sessionId}/disease`);
+  return data;
+}
+
+// === Social Hierarchy ===
+
+export async function getHierarchy(sessionId: string): Promise<HierarchyOverview> {
+  const { data } = await api.get(`/social/${sessionId}/hierarchy`);
+  return data;
+}
+
+export async function getRoles(sessionId: string): Promise<RoleBreakdown> {
+  const { data } = await api.get(`/social/${sessionId}/roles`);
+  return data;
+}
+
+export async function getMentorship(sessionId: string): Promise<{ enabled: boolean; chains: MentorshipChain[] }> {
+  const { data } = await api.get(`/social/${sessionId}/mentorship`);
+  return data;
+}
+
+export async function getInfluenceMap(sessionId: string): Promise<{ enabled: boolean; agents: InfluenceEntry[] }> {
+  const { data } = await api.get(`/social/${sessionId}/influence-map`);
+  return data;
+}
+
+// === Genetics ===
+
+export async function getAlleleFrequencies(sessionId: string): Promise<AlleleFrequencies> {
+  const { data } = await api.get(`/genetics/${sessionId}/allele-frequencies`);
+  return data;
+}
+
+export async function getEpigeneticPrevalence(sessionId: string): Promise<EpigeneticPrevalence> {
+  const { data } = await api.get(`/genetics/${sessionId}/epigenetic-prevalence`);
+  return data;
+}
+
+export async function getTraitGeneCorrelation(sessionId: string): Promise<TraitGeneCorrelation> {
+  const { data } = await api.get(`/genetics/${sessionId}/trait-gene-correlation`);
   return data;
 }

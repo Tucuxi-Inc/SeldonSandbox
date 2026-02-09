@@ -164,6 +164,8 @@ class SessionManager:
         from seldon.extensions import (
             GeographyExtension, MigrationExtension, ResourcesExtension,
             TechnologyExtension, CultureExtension, ConflictExtension,
+            SocialDynamicsExtension, DiplomacyExtension, EconomicsExtension,
+            EnvironmentExtension,
         )
 
         registry = ExtensionRegistry()
@@ -179,6 +181,10 @@ class SessionManager:
         registry.register(TechnologyExtension())
         registry.register(CultureExtension())
         registry.register(ConflictExtension())
+        registry.register(SocialDynamicsExtension())
+        registry.register(DiplomacyExtension(geo))
+        registry.register(EconomicsExtension())
+        registry.register(EnvironmentExtension())
 
         # Enable those requested (in order — dependency checked)
         for name in config.extensions_enabled:

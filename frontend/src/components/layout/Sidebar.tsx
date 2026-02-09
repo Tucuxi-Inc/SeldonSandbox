@@ -12,6 +12,12 @@ import {
   AlertTriangle,
   SlidersHorizontal,
   MessageSquare,
+  Crosshair,
+  Crown,
+  Building2,
+  Coins,
+  CloudSun,
+  Dna,
 } from 'lucide-react';
 
 const coreNavItems = [
@@ -29,6 +35,21 @@ const advancedNavItems = [
   { to: '/lore', icon: BookOpen, label: 'Lore Evolution' },
   { to: '/anomalies', icon: AlertTriangle, label: 'Anomalies' },
   { to: '/sensitivity', icon: SlidersHorizontal, label: 'Sensitivity' },
+  { to: '/outsiders', icon: Crosshair, label: 'Outsiders' },
+];
+
+const socialNavItems = [
+  { to: '/hierarchy', icon: Crown, label: 'Hierarchy' },
+  { to: '/communities', icon: Building2, label: 'Communities' },
+];
+
+const economyNavItems = [
+  { to: '/economics', icon: Coins, label: 'Economics' },
+  { to: '/environment', icon: CloudSun, label: 'Environment' },
+];
+
+const scienceNavItems = [
+  { to: '/genetics', icon: Dna, label: 'Genetics' },
 ];
 
 const llmNavItems = [
@@ -53,6 +74,17 @@ function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ComponentT
   );
 }
 
+function SectionDivider({ label }: { label: string }) {
+  return (
+    <>
+      <div className="my-2 border-t border-gray-800" />
+      <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-600">
+        {label}
+      </div>
+    </>
+  );
+}
+
 export function Sidebar() {
   return (
     <aside className="flex w-56 flex-col border-r border-gray-800 bg-gray-950">
@@ -62,7 +94,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-100">Seldon Sandbox</div>
-          <div className="text-xs text-gray-500">v0.5.0</div>
+          <div className="text-xs text-gray-500">v0.6.0</div>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -70,20 +102,27 @@ export function Sidebar() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <div className="my-2 border-t border-gray-800" />
-        <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-600">
-          Advanced
-        </div>
-
+        <SectionDivider label="Advanced" />
         {advancedNavItems.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}
 
-        <div className="my-2 border-t border-gray-800" />
-        <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-600">
-          LLM
-        </div>
+        <SectionDivider label="Social" />
+        {socialNavItems.map((item) => (
+          <NavItem key={item.to} {...item} />
+        ))}
 
+        <SectionDivider label="Economy" />
+        {economyNavItems.map((item) => (
+          <NavItem key={item.to} {...item} />
+        ))}
+
+        <SectionDivider label="Science" />
+        {scienceNavItems.map((item) => (
+          <NavItem key={item.to} {...item} />
+        ))}
+
+        <SectionDivider label="LLM" />
         {llmNavItems.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}

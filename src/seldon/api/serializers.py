@@ -19,6 +19,19 @@ def _int(v) -> int:
     return int(v) if v is not None else 0
 
 
+def _sanitize_lineage(lineage: dict) -> dict:
+    """Convert genetic lineage to JSON-safe format (tuples→lists)."""
+    result = {}
+    for k, v in lineage.items():
+        if isinstance(v, tuple):
+            result[k] = list(v)
+        elif isinstance(v, dict):
+            result[k] = _sanitize_lineage(v)
+        else:
+            result[k] = v
+    return result
+
+
 def serialize_agent_summary(agent: Agent, trait_system: TraitSystem) -> dict[str, Any]:
     """Lightweight agent summary for list views."""
     return {
@@ -76,6 +89,17 @@ def serialize_agent_detail(agent: Agent, trait_system: TraitSystem) -> dict[str,
         "resource_holdings": dict(agent.resource_holdings),
         "cultural_memes": list(agent.cultural_memes),
         "skills": dict(agent.skills),
+        # Social hierarchy (Phase 7)
+        "social_status": round(float(agent.social_status), 4),
+        "social_role": agent.social_role,
+        "influence_score": round(float(agent.influence_score), 4),
+        "mentor_id": agent.mentor_id,
+        "mentee_ids": list(agent.mentee_ids),
+        "social_bonds": {k: round(float(v), 4) for k, v in agent.social_bonds.items()},
+        # Genetics (Phase 8)
+        "genome": {k: list(v) for k, v in agent.genome.items()} if agent.genome else {},
+        "epigenetic_state": dict(agent.epigenetic_state) if agent.epigenetic_state else {},
+        "genetic_lineage": _sanitize_lineage(agent.genetic_lineage) if agent.genetic_lineage else {},
     }
 
 

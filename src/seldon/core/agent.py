@@ -65,6 +65,26 @@ class Agent:
     # === Decision history (for explainability) ===
     decision_history: list[dict[str, Any]] = field(default_factory=list)
 
+    # === Social hierarchy (Phase 7) ===
+    social_status: float = 0.0
+    mentor_id: str | None = None
+    mentee_ids: list[str] = field(default_factory=list)
+    social_role: str | None = None
+    influence_score: float = 0.0
+
+    # === Genetics (Phase 8) ===
+    genome: dict[str, tuple[str, str]] = field(default_factory=dict)
+    epigenetic_state: dict[str, bool] = field(default_factory=dict)
+    genetic_lineage: dict[str, Any] = field(default_factory=dict)
+
+    # === Community (Phase 9) ===
+    community_id: str | None = None
+
+    # === Economics (Phase 10) ===
+    wealth: float = 0.0
+    occupation: str | None = None
+    trade_history: list[dict[str, Any]] = field(default_factory=list)
+
     # === Extension hooks ===
     location_id: str | None = None
     resource_holdings: dict[str, float] = field(default_factory=dict)
@@ -76,6 +96,9 @@ class Agent:
     is_outsider: bool = False
     outsider_origin: str | None = None
     injection_generation: int | None = None
+
+    # === Demographics ===
+    gender: str | None = None
 
     # === Fertility tracking ===
     last_birth_generation: int | None = None

@@ -138,6 +138,10 @@ class InjectRequest(BaseModel):
     archetype: str | None = None
     custom_traits: dict[str, float] | None = None
     noise_sigma: float = 0.05
+    name: str | None = None
+    gender: str | None = None
+    age: int | None = None
+    injection_generation: int | None = None
 
 
 # === Sensitivity ===

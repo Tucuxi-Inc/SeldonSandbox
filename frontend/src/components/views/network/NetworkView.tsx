@@ -3,7 +3,7 @@ import { useSimulationStore } from '../../../stores/simulation';
 import { EmptyState } from '../../shared/EmptyState';
 import * as api from '../../../api/client';
 import * as d3 from 'd3';
-import type { NetworkGraph, NetworkNode, NetworkEdge } from '../../../types';
+import type { NetworkGraph, NetworkNode } from '../../../types';
 import { REGION_COLORS, REGION_LABELS, REGION_ORDER, EDGE_TYPE_COLORS } from '../../../lib/constants';
 
 export function NetworkView() {
@@ -98,7 +98,8 @@ export function NetworkView() {
         setSelectedNode(d as NetworkNode);
       })
       .call(
-        d3.drag<SVGCircleElement, SimNode>()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        d3.drag<any, SimNode>()
           .on('start', (event, d) => {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
@@ -110,9 +111,9 @@ export function NetworkView() {
           })
           .on('end', (event, d) => {
             if (!event.active) simulation.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-          })
+            d.fx = undefined;
+            d.fy = undefined;
+          }) as any
       );
 
     node.append('title')

@@ -1,6 +1,6 @@
 # The Seldon Sandbox
 
-**A multi-generational societal simulation engine for exploring how personality traits, cognitive processing styles, inheritance rules, and environmental pressures produce emergent social structures across generations.**
+**A multi-generational societal simulation engine for exploring how personality traits, cognitive processing styles, genetic inheritance, social hierarchies, and environmental pressures produce emergent social structures across generations.**
 
 Named after Hari Seldon from Asimov's *Foundation*, the Seldon Sandbox is a what-if engine -- an experimental platform for testing hypotheses about community composition, agent orchestration, and emergent group dynamics. The deeper purpose: understanding how to compose teams and communities of agents with complementary traits.
 
@@ -18,8 +18,11 @@ Built by [Kevin Keller](https://github.com/kkeller-tucuxi) of [Tucuxi Inc](https
 - [Architecture](#architecture)
 - [The RSH Five Regions Model](#the-rsh-five-regions-model)
 - [Birth Order Inheritance](#birth-order-inheritance)
+- [Genetics & Epigenetics](#genetics--epigenetics)
+- [Social Hierarchies & Mentorship](#social-hierarchies--mentorship)
 - [Trait System](#trait-system)
 - [Extensions](#extensions)
+- [Outsider Injection & Tracking](#outsider-injection--tracking)
 - [LLM Integration](#llm-integration)
 - [Experiment Presets](#experiment-presets)
 - [Archetypes](#archetypes)
@@ -36,12 +39,14 @@ Built by [Kevin Keller](https://github.com/kkeller-tucuxi) of [Tucuxi Inc](https
 The simulation models a population of agents, each defined by an N-dimensional personality trait vector (15 traits in compact mode, 50 in full mode). Every generation, agents:
 
 1. **Age and drift** -- traits shift over time based on experience and processing region effects
-2. **Get classified** into one of five cognitive processing regions (from the RSH model)
-3. **Contribute** to society -- output depends on their processing region, creativity, and resilience
-4. **Form and dissolve** relationships based on attraction (similarity, complementarity, chemistry)
-5. **Reproduce** -- children inherit traits via birth-order rules (1st=worst, 2nd=weirdest, 3rd=best)
-6. **Transmit memories and lore** -- stories degrade over generations, creating emergent myths
-7. **Die** -- from age, burnout, or environmental pressure
+2. **Update epigenetics** -- environmental markers activate or deactivate based on conditions (when genetics enabled)
+3. **Get classified** into one of five cognitive processing regions (from the RSH model)
+4. **Contribute** to society -- output depends on their processing region, creativity, and resilience
+5. **Form and dissolve** relationships based on attraction (similarity, complementarity, chemistry)
+6. **Reproduce** -- children inherit traits via birth-order rules (1st=worst, 2nd=weirdest, 3rd=best), optionally with allele-based genetic inheritance
+7. **Transmit memories and lore** -- stories degrade over generations, creating emergent myths
+8. **Participate in social dynamics** -- hierarchies form, mentorships develop, roles are assigned
+9. **Die** -- from age, burnout, conflict, or environmental pressure
 
 All of this is driven by pure math -- utility functions, softmax decisions, configurable thresholds. No randomness is hidden; everything flows through a seeded RNG for full reproducibility. LLMs are used only after the fact, for interviewing agents and narrating events.
 
@@ -96,8 +101,18 @@ docker compose up --build
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| `backend` | 8006 | FastAPI simulation engine + REST API |
-| `frontend` | 3006 | React dashboard (nginx serves built assets, proxies `/api` to backend) |
+| `backend` | 8006 | FastAPI simulation engine + REST API (Python source volume-mounted for live changes) |
+| `frontend` | 3006 | React dashboard (nginx serves statically built assets, proxies `/api` to backend) |
+
+### Important: Frontend vs Backend changes in Docker
+
+- **Backend changes** are picked up automatically -- the `src/` directory is volume-mounted into the container.
+- **Frontend changes require a rebuild** -- the frontend Docker image compiles TypeScript and bundles assets at build time. After modifying frontend code:
+
+```bash
+docker compose build frontend --no-cache
+docker compose up -d
+```
 
 ### Environment variables
 
@@ -106,9 +121,12 @@ Create a `.env` file in the project root (already gitignored):
 ```env
 # Optional: enables Anthropic Claude for agent interviews/narratives
 ANTHROPIC_API_KEY=sk-ant-...
+
+# Optional: custom Ollama host (default auto-detects Docker vs local)
+OLLAMA_HOST=http://host.docker.internal:11434
 ```
 
-The API key is passed into the Docker container automatically. Without it, the simulation runs normally -- LLM features just show an "unavailable" banner.
+The API key is passed into the Docker container automatically via the `env_file` directive in `docker-compose.yml`. Without it, the simulation runs normally -- LLM features just show an "unavailable" banner.
 
 ### Ollama (local LLM)
 
@@ -118,7 +136,51 @@ If you prefer running LLM features without an API key, install [Ollama](https://
 ollama pull llama3.2
 ```
 
-The Docker container automatically connects to Ollama on the host via `host.docker.internal`. You can also set `OLLAMA_HOST` to point to a custom Ollama instance. In the dashboard, go to the Interview view's Settings tab and select "Ollama" as the provider.
+The Docker container automatically connects to Ollama on the host via `host.docker.internal` (configured with `extra_hosts: host.docker.internal:host-gateway` in docker-compose). You can also set `OLLAMA_HOST` to point to a custom Ollama instance. In the dashboard, go to the Interview view's Settings tab and select "Ollama" as the provider.
+
+### Docker Compose configuration
+
+```yaml
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8006:8006"
+    volumes:
+      - ./src:/app/src          # Live backend code reload
+    env_file:
+      - .env                    # Loads ANTHROPIC_API_KEY, OLLAMA_HOST, etc.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Required for Ollama access
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3006:80"
+    depends_on:
+      - backend
+```
+
+### Rebuilding
+
+```bash
+# Rebuild everything
+docker compose up --build
+
+# Rebuild only frontend (after JS/TS changes)
+docker compose build frontend --no-cache && docker compose up -d
+
+# Restart only backend (after Python changes)
+docker compose restart backend
+
+# View logs
+docker compose logs -f backend
+docker compose logs -f frontend
+```
 
 ---
 
@@ -137,7 +199,7 @@ The Docker container automatically connects to Ollama on the host via `host.dock
 # Install with all development dependencies
 pip install -e ".[all]"
 
-# Start the API server
+# Start the API server (with hot reload)
 uvicorn seldon.api.app:app --host 0.0.0.0 --port 8006 --reload
 ```
 
@@ -157,19 +219,19 @@ The Vite dev server on port 3006 automatically proxies `/api` requests to the ba
 pytest tests/
 ```
 
-381 tests covering the core engine, social systems, extensions, API endpoints, and LLM integration. All LLM tests use mocked clients -- no real API calls.
+569 tests covering the core engine, genetics, social dynamics, extensions, API endpoints, and LLM integration. All LLM tests use mocked clients -- no real API calls.
 
 ---
 
 ## The Dashboard
 
-The web dashboard at [http://localhost:3006](http://localhost:3006) provides 12 interactive views:
+The web dashboard at [http://localhost:3006](http://localhost:3006) provides 18 interactive views organized into 6 sections:
 
 ### Core Views
 
 | View | What It Shows |
 |------|--------------|
-| **Mission Control** | Create sessions, configure parameters, toggle extensions, step through generations. The command center. |
+| **Mission Control** | Create sessions, configure all parameters (population, inheritance, regions, extensions, genetics, social dynamics, diplomacy, economics, environment), build and inject custom outsiders, step through or run generations. The command center for everything. |
 | **Population** | Population dynamics over time -- births, deaths, growth rate, region distribution as stacked areas. |
 | **Suffering & Contribution** | The central tension: scatter plots of suffering vs. contribution by processing region. Shows who produces at what cost. |
 | **Agent Explorer** | Searchable, filterable list of all agents (living and dead). Click any agent for full trait profile, history charts, memories, and decision log. |
@@ -185,12 +247,33 @@ The web dashboard at [http://localhost:3006](http://localhost:3006) provides 12 
 | **Lore Evolution** | How societal memories change over time. Fidelity decay, myth formation, memory type distribution. |
 | **Anomalies** | Statistical anomaly detection via z-scores. Flags unusual spikes in deaths, breakthroughs, suffering, or population shifts. |
 | **Sensitivity** | Compare multiple sessions to see which parameters have the most impact. Tornado diagrams and correlation analysis. |
+| **Outsider Tracker** | Registry of all injected outsiders, ripple impact charts (outsider fraction over time), selected outsider detail with descendants. |
+
+### Social Views
+
+| View | What It Shows |
+|------|--------------|
+| **Hierarchy** | Social status distribution, role breakdown (leader, innovator, mediator, worker, outsider_bridge), top agents by influence score, mentorship chains. |
+| **Communities** | Community personality radar charts, cohesion scores, diplomatic relations table with alliance/rivalry/neutral standings. |
+
+### Economy Views
+
+| View | What It Shows |
+|------|--------------|
+| **Economics** | GDP per community, occupation breakdown (pie chart), wealth distribution by percentile, trade routes with volumes. |
+| **Environment** | Current season indicator, climate state per location (temperature/rainfall), event timeline with severity, active disease tracker. |
+
+### Science Views
+
+| View | What It Shows |
+|------|--------------|
+| **Genetics** | Allele frequency stacked bar chart per locus, epigenetic marker prevalence bars, trait-gene correlation horizontal bars. Gracefully degrades when genetics not enabled. |
 
 ### LLM Views
 
 | View | What It Shows |
 |------|--------------|
-| **Agent Interview** | Four-tab interface: (1) Chat with any agent in-character, (2) Generate prose narratives for any generation, (3) Get psychological explanations of agent decisions, (4) Configure LLM provider (Anthropic or Ollama). |
+| **Agent Interview** | Four-tab interface: (1) Chat with any agent in-character, (2) Generate prose narratives for any generation, (3) Get psychological explanations of agent decisions, (4) Configure LLM provider (Anthropic or Ollama), model selection, API key management, test connection. |
 
 ---
 
@@ -204,27 +287,36 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
     |
     +-- CORE ENGINE
     |   +-- TraitSystem ........... configurable: 15 compact / 50 full / custom
-    |   +-- Agent ................. dataclass with traits, history, lore, decisions
+    |   +-- Agent ................. dataclass with traits, history, lore, decisions, genome
     |   +-- DecisionModel ......... utility-based: U(a|P,x) = P^T * W_a * x + b_a
     |   +-- CognitiveCouncil ...... optional 8-voice processing modulation
-    |   +-- InheritanceEngine ..... birth order rules (worst/weirdest/best/random)
+    |   +-- InheritanceEngine ..... birth order rules + optional genetic inheritance
     |   +-- ProcessingClassifier .. RSH Five Regions assignment
     |   +-- TraitDriftEngine ...... experience + age-based trait changes
     |   +-- AttractionModel ....... similarity, complementarity, chemistry
-    |   +-- SimulationEngine ...... 7-phase generation loop with extension hooks
+    |   +-- SimulationEngine ...... 9-phase generation loop with extension hooks
+    |   +-- GeneticModel .......... allele pairs, crossover, mutation, expression
+    |   +-- EpigeneticModel ....... environmental markers, transgenerational inheritance
+    |   +-- GeneticAttribution .... lineage tracking, trait-gene correlation
     |
     +-- SOCIAL
     |   +-- RelationshipManager ... pairing, dissolution, infidelity, widowing
     |   +-- FertilityManager ...... birth spacing, maternal/child mortality, pressure
     |   +-- LoreEngine ............ memory transmission, fidelity decay, myth formation
+    |   +-- SocialHierarchyManager  status, influence, role assignment
+    |   +-- MentorshipManager ..... matching, skill transfer, dissolution, chains
     |
     +-- EXTENSIONS (optional, via ExtensionRegistry)
     |   +-- Geography ............. hexagonal grid, settlements, terrain
-    |   +-- Migration ............. settlement viability, group migration
+    |   +-- Migration ............. settlement viability, group migration (requires Geography)
     |   +-- Resources ............. resource production, distribution, scarcity
     |   +-- Technology ............ tech advancement, tool access
     |   +-- Culture ............... cultural memes, transmission, dominance
-    |   +-- Conflict .............. inter-group tension, resolution
+    |   +-- Conflict .............. personality-based triggers, trait-influenced resolution
+    |   +-- Social Dynamics ....... hierarchy + mentorship wired into engine hooks
+    |   +-- Diplomacy ............. alliances, rivalries, cultural exchange (requires Geography)
+    |   +-- Economics ............. production, trade, wealth distribution, occupations
+    |   +-- Environment ........... seasons, climate, drought, plague, disease
     |
     +-- LLM (narrative layer, never affects simulation)
     |   +-- ClaudeClient .......... Anthropic API wrapper
@@ -235,21 +327,21 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
     |
     +-- METRICS & API
         +-- MetricsCollector ...... per-generation statistics
-        +-- FastAPI REST API ...... 8 routers, 30+ endpoints
-        +-- React Dashboard ....... 12 views, real-time updates
+        +-- FastAPI REST API ...... 13 routers, 50+ endpoints
+        +-- React Dashboard ....... 18 views, real-time updates
 ```
 
-### Generation Loop (7 phases per generation)
+### Generation Loop (9 phases per generation)
 
 1. **Age & Trait Drift** -- Agents age, traits shift based on drift rate and processing region effects
-2. **Processing Region Updates** -- Reclassify into R1-R5; update dominant cognitive voice
-3. **Contribution & Breakthroughs** -- Calculate output, detect breakthroughs, create memories
-4. **Relationship Dynamics** -- Process dissolutions, form new pairs via the decision model
-5. **Reproduction** -- Paired agents produce children; traits inherited via birth order rules; lore transmitted
-6. **Lore Evolution** -- Societal-level memory consensus, conflict, mutation, myth formation
-7. **Mortality** -- Age/burnout/extension-modified death checks; handle widowing
-
-Extensions hook into this loop at 8 points: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, and get metrics.
+2. **Epigenetic Updates** -- Environmental markers activate/deactivate based on agent conditions (Phase 1.5, when genetics enabled)
+3. **Processing Region Updates** -- Reclassify into R1-R5; update dominant cognitive voice
+4. **Contribution & Breakthroughs** -- Calculate output, detect breakthroughs, create memories
+5. **Relationship Dynamics** -- Process dissolutions, form new pairs via the decision model
+6. **Reproduction** -- Paired agents produce children; traits inherited via birth order rules (optionally with allele-based genetics); lore transmitted
+7. **Lore Evolution** -- Societal-level memory consensus, conflict, mutation, myth formation
+8. **Mortality** -- Age/burnout/extension-modified death checks; handle widowing
+9. **Extension Hooks** -- Extensions fire at 8 lifecycle points: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, and collect metrics
 
 ---
 
@@ -285,6 +377,96 @@ The foundational hypothesis that drives emergent population dynamics:
 Gaussian noise (configurable via `inheritance_noise_sigma`) adds developmental variance. Dead children count for birth-order assignment. Twins are handled: identical twins share a position, fraternal twins get distinct assignments.
 
 These rules are fully configurable -- testing inverted, disabled, or custom rules is the whole point. The `inverted_birth_order` preset flips 1st=best and 3rd=worst to test the opposite hypothesis.
+
+---
+
+## Genetics & Epigenetics
+
+An optional layer that adds allele-based genetic inheritance and environmental epigenetic markers to the simulation. Enable from Mission Control's "Genetics & Epigenetics" config section.
+
+### Genetic Model
+
+When genetics is enabled, each agent carries a genome of 10 gene loci (allele pairs):
+
+| Locus | Mapped Trait | Effect |
+|-------|-------------|--------|
+| CREA_1 | creativity | Dominant allele boosts creative output |
+| RESI_1 | resilience | Affects recovery and burnout resistance |
+| NEUR_1 | neuroticism | Influences emotional stability |
+| EXTR_1 | extraversion | Social engagement tendency |
+| CONS_1 | conscientiousness | Work ethic and reliability |
+| OPEN_1 | openness | Curiosity and intellectual exploration |
+| DEPT_1 | depth_drive | Processing depth tendency |
+| AGRE_1 | agreeableness | Cooperation and social harmony |
+| AMBI_1 | ambition | Drive and goal orientation |
+| EMPA_1 | empathy | Emotional understanding |
+
+Allele expression follows Mendelian genetics: AA = +1.0 (fully dominant), Aa = +0.5 (heterozygous), aa = -1.0 (recessive). During reproduction, genomes undergo crossover and mutation (rates configurable via `genetics_config`).
+
+### Epigenetic Model
+
+Five environmental markers can activate or deactivate across generations based on agent experiences:
+
+- **stress_resilience** -- activates under sustained suffering
+- **creative_amplification** -- activates in high-creativity environments
+- **social_withdrawal** -- activates from social isolation
+- **resource_conservation** -- activates during resource scarcity
+- **trauma_sensitivity** -- activates from traumatic events
+
+Epigenetic markers exhibit transgenerational inheritance -- a marker activated in a parent can be passed to children at a configurable rate. This creates emergent multi-generational adaptation patterns.
+
+### Configuration
+
+```python
+config = ExperimentConfig(
+    genetics_config={
+        "genetics_enabled": True,
+        "mutation_rate": 0.01,
+        "crossover_rate": 0.5,
+        "gene_trait_influence": 0.3,
+    },
+    epigenetics_config={
+        "epigenetics_enabled": True,
+        "transgenerational_rate": 0.3,
+        "activation_threshold_generations": 2,
+        "max_active_markers": 3,
+    },
+)
+```
+
+When genetics is disabled, the simulation falls back to standard birth-order inheritance with zero behavioral change.
+
+---
+
+## Social Hierarchies & Mentorship
+
+An optional extension that adds social status, influence scoring, role assignment, and mentorship systems.
+
+### Hierarchy
+
+Every agent receives a **social status** score (0-1) based on their contributions, age, and social connections. Status determines role assignment:
+
+| Role | Description |
+|------|-------------|
+| **leader** | High status, high influence -- shapes community direction |
+| **innovator** | High creativity, drives breakthroughs |
+| **mediator** | High agreeableness + empathy, resolves conflicts |
+| **worker** | Steady contributors, backbone of the community |
+| **outsider_bridge** | Injected outsiders who connect communities |
+| **unassigned** | No clear role yet (typically young agents) |
+
+An **influence score** decays over time (configurable rate) and determines how much an agent's decisions affect others.
+
+### Mentorship
+
+Experienced agents can mentor younger ones:
+
+- **Matching**: Based on skill complementarity and social proximity
+- **Skill Transfer**: Mentees gain trait boosts from mentors over time
+- **Dissolution**: Mentorships end when the mentee outgrows the mentor or either dies
+- **Chains**: A mentor's mentor's influence can trace through multi-generation lineages
+
+Enable via the "Social Dynamics" extension toggle on Mission Control.
 
 ---
 
@@ -325,10 +507,11 @@ Extensions are optional modules that add environmental complexity. Enable them f
 
 ```python
 config = ExperimentConfig(
-    extensions_enabled=["geography", "migration", "resources"],
+    extensions_enabled=["geography", "migration", "resources", "social_dynamics", "economics"],
     extensions={
         "geography": {"grid_size": 10},
         "resources": {"base_production": 1.0},
+        "economics": {"trade_distance_cost": 0.1},
     }
 )
 ```
@@ -340,9 +523,79 @@ config = ExperimentConfig(
 | **Resources** | Resource production, distribution, scarcity pressure | None |
 | **Technology** | Technology level advancement, tool access, skill development | None |
 | **Culture** | Cultural memes, transmission between agents, meme dominance | None |
-| **Conflict** | Inter-group tension, conflict resolution, raiding | None |
+| **Conflict** | Personality-based conflict triggers (dominance clashes, trust betrayals), trait-influenced resolution (submission, compromise, separation, escalation) | None |
+| **Social Dynamics** | Social hierarchy (status, influence, roles), mentorship (matching, skill transfer, chains) | None |
+| **Diplomacy** | Alliance formation, rivalry detection, cultural exchange between settlements | Geography |
+| **Economics** | Production, trade routes, wealth distribution, occupations, poverty effects | None |
+| **Environment** | Seasonal cycles, climate drift, droughts, plagues, disease tracking | Geography |
 
 Extensions hook into the generation loop at 8 points (simulation start, generation start/end, agent created, modify attraction/mortality/decisions, collect metrics). They can modify how agents make decisions, who they're attracted to, and how likely they are to die -- but the core simulation math stays the same.
+
+### Configuring Extensions from Mission Control
+
+The dashboard provides collapsible config panels for each extension group:
+
+- **Genetics & Epigenetics** -- mutation rate, gene-trait influence, transgenerational rate
+- **Social Dynamics** -- status weights, influence decay, mentorship toggle, max mentees
+- **Diplomacy** -- alliance/rivalry thresholds, cultural exchange rate
+- **Economics** -- base production, trade distance cost, poverty threshold
+- **Environment** -- season toggle/length, drought/plague probability, climate drift rate
+
+Dependencies are enforced automatically: enabling Migration auto-enables Geography; enabling Diplomacy or Environment auto-enables Geography.
+
+---
+
+## Outsider Injection & Tracking
+
+Outsiders are agents with pre-defined trait profiles injected into an existing population mid-simulation. They test how foreign personality types propagate through and influence a community.
+
+### Outsider Builder (Mission Control)
+
+The dashboard provides a two-mode outsider builder:
+
+**Archetype Mode**: Select from 11 pre-defined personality archetypes (Da Vinci, Einstein, etc.), optionally override the name, set an injection generation, and adjust noise sigma.
+
+**Custom Build Mode**: Build an outsider from scratch:
+- Set name, gender, and age
+- Adjust each trait individually via per-trait sliders (trait names fetched dynamically from the backend)
+- Choose the injection generation (default: current generation)
+- Preview the agent before injection
+
+### Outsider Tracker View
+
+A dedicated view for monitoring outsider impact after injection:
+
+1. **Outsider Registry** -- list of all injected outsiders with status, processing region, generation, and age
+2. **Ripple Impact** -- outsider fraction over time (line chart), annotated with injection points
+3. **Selected Outsider Detail** -- origin, injection generation, trait distance from population mean, descendant count, descendant list
+
+### API
+
+```python
+# Inject by archetype
+POST /api/experiments/inject-outsider
+{
+    "session_id": "abc123",
+    "archetype": "einstein",
+    "name": "Albert",          # optional name override
+    "injection_generation": 5   # optional, default = current generation
+}
+
+# Inject custom traits
+POST /api/experiments/inject-outsider
+{
+    "session_id": "abc123",
+    "custom_traits": {"creativity": 0.95, "resilience": 0.8, "depth_drive": 0.9},
+    "name": "Custom Agent",
+    "gender": "female",
+    "age": 30
+}
+
+# Track impact
+GET /api/experiments/{session_id}/outsiders           # List all outsiders
+GET /api/experiments/{session_id}/outsiders/{id}/impact  # Outsider impact detail
+GET /api/experiments/{session_id}/ripple              # Trait diffusion report
+```
 
 ---
 
@@ -366,10 +619,15 @@ Select any decision from an agent's history and get a psychological analysis of 
 
 | Provider | Setup | Best For |
 |----------|-------|----------|
-| **Anthropic (Claude)** | Set `ANTHROPIC_API_KEY` env var | Highest quality narratives |
-| **Ollama (Local)** | Install Ollama, pull a model | Free, private, no API key needed |
+| **Anthropic (Claude)** | Set `ANTHROPIC_API_KEY` env var or enter in Settings tab | Highest quality narratives |
+| **Ollama (Local)** | Install Ollama, pull a model (e.g., `ollama pull llama3.2`) | Free, private, no API key needed |
 
-Switch providers in the Interview view's Settings tab. Ollama auto-detects local models.
+Switch providers in the Interview view's Settings tab. The settings panel provides:
+- Card-based provider selection (Anthropic/Ollama)
+- Model dropdown for both providers (Ollama auto-detects installed models)
+- API key management for Anthropic (enter/delete at runtime)
+- Configurable Ollama base URL
+- Test Connection button to verify setup
 
 ---
 
@@ -410,7 +668,7 @@ Pre-configured experiment templates accessible from Mission Control or programma
 | **Ada Lovelace** | Visionary engineer -- mathematical creativity, future-seeing | Engineering/innovation societies |
 | **Carl Sagan** | Science communicator -- wonder, accessibility, cosmic perspective | Knowledge-sharing communities |
 
-Inject archetypes mid-simulation from Mission Control or via the API. The Ripple Tracker measures how outsider traits propagate through the population over generations.
+Inject archetypes mid-simulation from Mission Control's Outsider Builder or via the API. The Ripple Tracker and Outsider Tracker views measure how outsider traits propagate through the population over generations.
 
 ---
 
@@ -469,6 +727,26 @@ for label, result in results.items():
     print(f"drift={label}: final_pop={result.final_population_size}")
 ```
 
+### With genetics and extensions
+
+```python
+config = ExperimentConfig(
+    initial_population=80,
+    generations_to_run=30,
+    random_seed=42,
+    extensions_enabled=["geography", "migration", "resources", "social_dynamics", "economics"],
+    genetics_config={"genetics_enabled": True, "mutation_rate": 0.01},
+    epigenetics_config={"epigenetics_enabled": True},
+    extensions={
+        "geography": {"grid_size": 8},
+        "economics": {"base_production_rate": 1.5},
+    },
+)
+
+engine = SimulationEngine(config)
+history = engine.run()
+```
+
 ### Archetype injection
 
 ```python
@@ -492,13 +770,13 @@ print(f"Outsider trait diffusion: {report['injections']} injections")
 
 ## API Reference
 
-The REST API runs on port 8006 with 8 routers and 30+ endpoints.
+The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 
 ### Simulation Management -- `/api/simulation`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/sessions` | Create a new simulation session |
+| `POST` | `/sessions` | Create a new simulation session (accepts full config) |
 | `GET` | `/sessions` | List all sessions |
 | `GET` | `/sessions/{id}` | Get session details |
 | `DELETE` | `/sessions/{id}` | Delete a session |
@@ -529,9 +807,12 @@ The REST API runs on port 8006 with 8 routers and 30+ endpoints.
 | `GET` | `/presets` | List all presets with configs |
 | `GET` | `/archetypes` | List all archetypes |
 | `GET` | `/archetypes/{name}` | Full archetype detail with trait values |
+| `GET` | `/trait-names` | Ordered list of trait names from the trait system |
 | `POST` | `/compare` | Compare metrics across sessions |
-| `POST` | `/inject-outsider` | Inject archetype or custom traits into a session |
+| `POST` | `/inject-outsider` | Inject archetype or custom outsider (with name, gender, age, injection gen) |
 | `GET` | `/{session_id}/ripple` | Outsider trait diffusion report |
+| `GET` | `/{session_id}/outsiders` | List all injected outsiders in a session |
+| `GET` | `/{session_id}/outsiders/{agent_id}/impact` | Outsider impact detail (descendants, trait distance) |
 
 ### Settlements -- `/api/settlements`
 
@@ -557,11 +838,57 @@ The REST API runs on port 8006 with 8 routers and 30+ endpoints.
 | `GET` | `/{session_id}/lore/meme-prevalence` | Cultural meme prevalence over time |
 | `POST` | `/{session_id}/sensitivity` | Parameter sensitivity analysis |
 
+### Social -- `/api/social`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/hierarchy` | Social status distribution and stats |
+| `GET` | `/{session_id}/roles` | Role breakdown across the population |
+| `GET` | `/{session_id}/mentorship` | Active mentorship pairs and chains |
+| `GET` | `/{session_id}/influence-map` | Agent influence scores and rankings |
+
+### Communities -- `/api/communities`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/communities` | Community profiles with personality and cohesion |
+| `GET` | `/{session_id}/diplomacy` | Diplomatic relations between communities |
+
+### Economics -- `/api/economics`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/overview` | Economic overview (GDP, Gini, population stats) |
+| `GET` | `/{session_id}/trade-routes` | Active trade routes with volumes |
+| `GET` | `/{session_id}/markets` | Market state per settlement |
+| `GET` | `/{session_id}/wealth-distribution` | Wealth percentile breakdown |
+| `GET` | `/{session_id}/occupations` | Occupation type distribution |
+
+### Environment -- `/api/environment`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/climate` | Climate state (temperature, rainfall, season) |
+| `GET` | `/{session_id}/events` | Environmental event history (droughts, plagues) |
+| `GET` | `/{session_id}/disease` | Active disease tracking |
+
+### Genetics -- `/api/genetics`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/allele-frequencies` | Per-locus allele frequency breakdown |
+| `GET` | `/{session_id}/epigenetic-prevalence` | Epigenetic marker activation rates |
+| `GET` | `/{session_id}/trait-gene-correlation` | Pearson correlation between gene expression and trait values |
+
 ### LLM -- `/api/llm`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/status` | Provider availability (Anthropic + Ollama) |
+| `POST` | `/api-key` | Set Anthropic API key at runtime |
+| `DELETE` | `/api-key` | Clear runtime API key |
+| `POST` | `/ollama-url` | Set custom Ollama base URL |
+| `POST` | `/test-connection` | Test LLM provider connectivity |
 | `POST` | `/{session_id}/interview/{agent_id}` | In-character agent interview |
 | `GET` | `/{session_id}/narrative/{generation}` | Prose narrative for a generation |
 | `POST` | `/{session_id}/decision-explain` | Psychological decision analysis |
@@ -570,7 +897,7 @@ The REST API runs on port 8006 with 8 routers and 30+ endpoints.
 
 ## Tests
 
-381 tests covering all layers of the system.
+569 tests across 27 test files covering all layers of the system.
 
 ```bash
 # Run all tests
@@ -605,10 +932,16 @@ pytest --cov=seldon tests/
 | `test_archetypes.py` | All 11 archetype vectors |
 | `test_presets.py` | All 10 experiment presets |
 | `test_runner.py` | A/B tests, parameter sweeps, multi-seed |
-| `test_extensions.py` | Extension ABC, registry, all 6 extensions |
+| `test_extensions.py` | Extension ABC, registry, all extension modules |
 | `test_api.py` | REST API endpoints (sessions, agents, metrics) |
 | `test_api_advanced.py` | Advanced endpoints (anomaly, lore, settlements, network, sensitivity) |
 | `test_llm.py` | LLM client, prompts, interviewer, narrator (mocked) |
+| `test_social_dynamics.py` | Hierarchy, mentorship, influence, role assignment |
+| `test_genetics.py` | Genetic model, alleles, crossover, mutation, expression |
+| `test_genetics_api.py` | Genetics router, outsider endpoints, custom injection, gender |
+| `test_community.py` | Community detection, diplomatic relations |
+| `test_economics.py` | Production, trade, wealth distribution |
+| `test_environment.py` | Seasons, climate, events, disease |
 
 All LLM tests use mocked clients. No real API calls are made during testing.
 
@@ -620,20 +953,30 @@ All LLM tests use mocked clients. No real API calls are made during testing.
 seldon-sandbox/
 +-- src/seldon/
 |   +-- core/           # TraitSystem, Agent, Config, Engine, Inheritance,
-|   |                   #   Processing, Drift, Attraction, Decision, Council
-|   +-- social/         # RelationshipManager, FertilityManager, LoreEngine
+|   |                   #   Processing, Drift, Attraction, Decision, Council,
+|   |                   #   GeneticModel, EpigeneticModel, GeneticAttribution
+|   +-- social/         # RelationshipManager, FertilityManager, LoreEngine,
+|   |                   #   SocialHierarchyManager, MentorshipManager
 |   +-- metrics/        # MetricsCollector
 |   +-- experiment/     # ExperimentRunner, Presets, Archetypes, OutsiderInterface
-|   +-- extensions/     # SimulationExtension ABC, Registry, 6 extension modules
+|   +-- extensions/     # SimulationExtension ABC, Registry, 10 extension modules
+|   |                   #   (geography, migration, resources, technology, culture,
+|   |                   #    conflict, social_dynamics, diplomacy, economics, environment)
 |   +-- llm/            # ClaudeClient, OllamaClient, Interviewer, Narrator, Prompts
-|   +-- api/            # FastAPI app, SessionManager, Serializers, 8 routers
-+-- frontend/           # React + TypeScript + Tailwind + Recharts + D3
+|   +-- api/            # FastAPI app, SessionManager, Serializers, 13 routers
+|                       #   (simulation, agents, metrics, experiments, settlements,
+|                       #    network, advanced, llm, social, communities, economics,
+|                       #    environment, genetics)
++-- frontend/           # React + TypeScript + Tailwind v4 + Recharts + D3
 |   +-- src/
-|       +-- components/views/   # 12 dashboard views
-|       +-- api/client.ts       # API client
-|       +-- stores/             # Zustand state management
-|       +-- types/              # TypeScript interfaces
-+-- tests/              # 381 tests (pytest + hypothesis)
+|       +-- components/
+|       |   +-- views/         # 18 dashboard views
+|       |   +-- layout/        # Sidebar, MainLayout
+|       |   +-- shared/        # Reusable components
+|       +-- api/client.ts      # API client (50+ functions)
+|       +-- stores/            # Zustand state management
+|       +-- types/             # TypeScript interfaces
++-- tests/              # 569 tests (pytest)
 +-- examples/           # CLI example scripts
 +-- docs/               # Architecture docs, conversation transcripts
 +-- docker-compose.yml  # One-command deployment
@@ -651,7 +994,7 @@ seldon-sandbox/
 
 3. **Compare runs.** A/B testing and parameter sweeps are first-class. The system is designed for "what happens if I change X?" experiments.
 
-4. **Core is simple, complexity is opt-in.** The base simulation runs with zero extensions. Geography, migration, resources, technology, culture, and conflict are all optional modules.
+4. **Core is simple, complexity is opt-in.** The base simulation runs with zero extensions. All 10 environmental, social, and economic extensions are optional modules. Genetics and epigenetics are opt-in layers that fall back gracefully.
 
 5. **Decisions are mathematical and explainable.** Every choice flows through a utility-based decision model: `U(a|P,x) = P^T * W_a * x + b_a` with softmax selection. Per-trait contribution analysis is recorded for every decision.
 
@@ -673,6 +1016,10 @@ seldon-sandbox/
 - **Lore degradation**: How do distorted memories affect collective behavior?
 - **Archetype societies**: What emerges from a society of Einsteins? Of Curies + Fred Rogers?
 - **Resource scarcity pressure**: How does scarcity change processing region distributions?
+- **Genetic drift vs selection**: Do allele frequencies shift toward optimal or random distributions?
+- **Epigenetic adaptation**: Do trauma markers persist and help future generations cope?
+- **Social hierarchy emergence**: What personality mixes produce stable vs. chaotic hierarchies?
+- **Economic inequality**: How does trade network topology affect wealth distribution?
 
 ---
 

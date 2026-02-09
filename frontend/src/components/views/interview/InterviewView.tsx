@@ -4,7 +4,6 @@ import * as api from '../../../api/client';
 import type {
   AgentSummary,
   LLMStatus,
-  InterviewResponse,
   NarrativeResponse,
   DecisionExplainResponse,
   AgentDetail,
@@ -21,8 +20,12 @@ export function InterviewView() {
   const [provider, setProvider] = useState<string>('anthropic');
   const [selectedModel, setSelectedModel] = useState<string>('');
 
-  useEffect(() => {
+  const refreshStatus = () => {
     api.getLLMStatus().then(setLlmStatus).catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshStatus();
   }, []);
 
   // Auto-select provider based on availability
@@ -94,6 +97,7 @@ export function InterviewView() {
           setProvider={setProvider}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          onStatusRefresh={refreshStatus}
         />
       )}
     </div>
@@ -110,108 +114,265 @@ function SettingsTab({
   setProvider,
   selectedModel,
   setSelectedModel,
+  onStatusRefresh,
 }: {
   llmStatus: LLMStatus | null;
   provider: string;
   setProvider: (p: string) => void;
   selectedModel: string;
   setSelectedModel: (m: string) => void;
+  onStatusRefresh: () => void;
 }) {
+  const anthropicModels = llmStatus?.providers.anthropic.models ?? [];
   const ollamaModels = llmStatus?.providers.ollama.models ?? [];
+  const ollamaBaseUrl = llmStatus?.providers.ollama.base_url ?? '';
+
+  const [apiKey, setApiKey] = useState('');
+  const [keyStatus, setKeyStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [keyError, setKeyError] = useState('');
+  const [customOllamaUrl, setCustomOllamaUrl] = useState(ollamaBaseUrl);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useState(false);
+
+  // Sync Ollama URL from status
+  useEffect(() => {
+    if (ollamaBaseUrl && !customOllamaUrl) setCustomOllamaUrl(ollamaBaseUrl);
+  }, [ollamaBaseUrl]);
+
+  const handleSaveKey = async () => {
+    if (!apiKey.trim()) return;
+    setKeyStatus('saving');
+    setKeyError('');
+    try {
+      await api.setLLMApiKey(apiKey.trim());
+      setKeyStatus('success');
+      setApiKey('');
+      onStatusRefresh();
+    } catch (err: unknown) {
+      setKeyStatus('error');
+      setKeyError(err instanceof Error ? err.message : 'Failed to set API key');
+    }
+  };
+
+  const handleClearKey = async () => {
+    try {
+      await api.clearLLMApiKey();
+      setKeyStatus('idle');
+      onStatusRefresh();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleTestConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const result = await api.testLLMConnection({
+        provider,
+        model: selectedModel || undefined,
+        ollama_base_url: provider === 'ollama' ? customOllamaUrl || undefined : undefined,
+      });
+      setTestResult(result);
+      if (result.success) onStatusRefresh();
+    } catch (err: unknown) {
+      setTestResult({ success: false, message: err instanceof Error ? err.message : 'Connection test failed' });
+    }
+    setTesting(false);
+  };
+
+  const handleSaveOllamaUrl = async () => {
+    try {
+      await api.setOllamaUrl(customOllamaUrl);
+      onStatusRefresh();
+    } catch {
+      // handled by test connection
+    }
+  };
+
+  const models = provider === 'anthropic' ? anthropicModels : ollamaModels;
 
   return (
-    <div className="max-w-lg space-y-6">
-      <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
+    <div className="max-w-2xl space-y-6">
+      {/* Provider Selection - Card Layout */}
+      <div className="rounded-lg border border-gray-800 bg-gray-900 p-5">
         <h2 className="mb-4 text-lg font-semibold text-gray-200">LLM Provider</h2>
-
-        <div className="space-y-3">
-          {/* Anthropic */}
-          <label className="flex items-start gap-3 rounded-lg border border-gray-700 p-3 cursor-pointer hover:bg-gray-800/50">
-            <input
-              type="radio"
-              name="provider"
-              value="anthropic"
-              checked={provider === 'anthropic'}
-              onChange={() => { setProvider('anthropic'); setSelectedModel(''); }}
-              className="mt-1 accent-blue-600"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-200">Anthropic (Claude)</span>
-                <span className={`rounded px-1.5 py-0.5 text-xs ${
-                  llmStatus?.providers.anthropic.available
-                    ? 'bg-green-900 text-green-300'
-                    : 'bg-red-900 text-red-300'
-                }`}>
-                  {llmStatus?.providers.anthropic.available ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                Requires <code className="text-gray-400">ANTHROPIC_API_KEY</code> environment variable.
-                Uses Claude Sonnet by default.
-              </p>
+        <div className="grid grid-cols-2 gap-3">
+          {/* Anthropic Card */}
+          <button
+            onClick={() => {
+              setProvider('anthropic');
+              const am = llmStatus?.providers.anthropic.models ?? [];
+              if (am.length > 0) setSelectedModel(am[0]);
+              else setSelectedModel('');
+              setTestResult(null);
+            }}
+            className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+              provider === 'anthropic'
+                ? 'border-blue-500 bg-blue-500/10'
+                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-200">Anthropic</span>
+              <span className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                provider === 'anthropic' ? 'border-blue-500 bg-blue-500' : 'border-gray-600'
+              }`}>
+                {provider === 'anthropic' && (
+                  <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
             </div>
-          </label>
+            <p className="mt-1 text-xs text-gray-500">Claude models from Anthropic</p>
+            {llmStatus?.providers.anthropic.available && (
+              <span className="absolute top-2 right-8 h-2 w-2 rounded-full bg-green-500" />
+            )}
+          </button>
 
-          {/* Ollama */}
-          <label className="flex items-start gap-3 rounded-lg border border-gray-700 p-3 cursor-pointer hover:bg-gray-800/50">
-            <input
-              type="radio"
-              name="provider"
-              value="ollama"
-              checked={provider === 'ollama'}
-              onChange={() => {
-                setProvider('ollama');
-                if (ollamaModels.length > 0) setSelectedModel(ollamaModels[0]);
-              }}
-              className="mt-1 accent-blue-600"
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-200">Ollama (Local)</span>
-                <span className={`rounded px-1.5 py-0.5 text-xs ${
-                  llmStatus?.providers.ollama.available
-                    ? 'bg-green-900 text-green-300'
-                    : 'bg-red-900 text-red-300'
-                }`}>
-                  {llmStatus?.providers.ollama.available ? 'Available' : 'Unavailable'}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-gray-500">
-                No API key required. Runs models locally via Ollama. Start Ollama first, then pull models.
-              </p>
+          {/* Ollama Card */}
+          <button
+            onClick={() => {
+              setProvider('ollama');
+              const om = llmStatus?.providers.ollama.models ?? [];
+              if (om.length > 0) setSelectedModel(om[0]);
+              else setSelectedModel('');
+              setTestResult(null);
+            }}
+            className={`relative rounded-lg border-2 p-4 text-left transition-all ${
+              provider === 'ollama'
+                ? 'border-blue-500 bg-blue-500/10'
+                : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-200">Ollama</span>
+              <span className={`h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                provider === 'ollama' ? 'border-blue-500 bg-blue-500' : 'border-gray-600'
+              }`}>
+                {provider === 'ollama' && (
+                  <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </span>
             </div>
-          </label>
+            <p className="mt-1 text-xs text-gray-500">Local inference (no API key required)</p>
+            {llmStatus?.providers.ollama.available && (
+              <span className="absolute top-2 right-8 h-2 w-2 rounded-full bg-green-500" />
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Model Selection (Ollama) */}
-      {provider === 'ollama' && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <h2 className="mb-3 text-lg font-semibold text-gray-200">Model</h2>
-          {ollamaModels.length > 0 ? (
-            <select
-              className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200"
-              value={selectedModel}
-              onChange={(e) => setSelectedModel(e.target.value)}
-            >
-              {ollamaModels.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+      {/* Anthropic API Key */}
+      {provider === 'anthropic' && (
+        <div className="rounded-lg border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-3 text-sm font-semibold text-gray-300">API Key</h2>
+          {llmStatus?.providers.anthropic.has_key ? (
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-green-900 px-2 py-0.5 text-xs text-green-300">Configured</span>
+                <span className="text-xs text-gray-500">API key is active</span>
+              </div>
+              <button
+                onClick={handleClearKey}
+                className="rounded-md border border-gray-700 px-3 py-1.5 text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+              >
+                Clear
+              </button>
+            </div>
           ) : (
-            <p className="text-sm text-gray-500">
-              No models found. Run <code className="text-gray-400">ollama pull llama3.2</code> to download a model.
-            </p>
+            <div className="space-y-3">
+              <p className="text-xs text-gray-500">
+                Enter your API key (in-memory only) or set <code className="text-gray-400">ANTHROPIC_API_KEY</code> in <code className="text-gray-400">.env</code>
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => { setApiKey(e.target.value); setKeyStatus('idle'); }}
+                  placeholder="sk-ant-..."
+                  className="flex-1 rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-600"
+                />
+                <button
+                  onClick={handleSaveKey}
+                  disabled={!apiKey.trim() || keyStatus === 'saving'}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40"
+                >
+                  {keyStatus === 'saving' ? 'Saving...' : 'Set Key'}
+                </button>
+              </div>
+              {keyStatus === 'success' && <p className="text-xs text-green-400">API key set successfully.</p>}
+              {keyStatus === 'error' && <p className="text-xs text-red-400">{keyError}</p>}
+            </div>
           )}
         </div>
       )}
 
-      {/* Status Summary */}
-      {llmStatus && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <h2 className="mb-3 text-lg font-semibold text-gray-200">Status</h2>
-          <p className="text-sm text-gray-400">{llmStatus.message}</p>
+      {/* Model Selection - both providers */}
+      <div className="rounded-lg border border-gray-800 bg-gray-900 p-5">
+        <h2 className="mb-3 text-sm font-semibold text-gray-300">Model</h2>
+        {models.length > 0 ? (
+          <select
+            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-200"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        ) : (
+          <p className="text-sm text-gray-500">
+            {provider === 'anthropic'
+              ? 'Set an API key to see available models.'
+              : 'No models found. Start Ollama and pull a model (e.g. ollama pull gemma3:27b).'}
+          </p>
+        )}
+      </div>
+
+      {/* Ollama Base URL */}
+      {provider === 'ollama' && (
+        <div className="rounded-lg border border-gray-800 bg-gray-900 p-5">
+          <h2 className="mb-3 text-sm font-semibold text-gray-300">Ollama Base URL</h2>
+          <input
+            type="text"
+            value={customOllamaUrl}
+            onChange={(e) => setCustomOllamaUrl(e.target.value)}
+            onBlur={handleSaveOllamaUrl}
+            placeholder="http://localhost:11434"
+            className="w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2.5 text-sm text-gray-200 placeholder:text-gray-600"
+          />
+          <p className="mt-1.5 text-xs text-gray-600">URL where Ollama is running locally</p>
+        </div>
+      )}
+
+      {/* Test Connection + Status */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={handleTestConnection}
+          disabled={testing}
+          className="rounded-md border border-gray-600 bg-gray-800 px-5 py-2.5 text-sm font-medium text-gray-200 hover:bg-gray-700 disabled:opacity-40"
+        >
+          {testing ? 'Testing...' : 'Test Connection'}
+        </button>
+        <button
+          onClick={onStatusRefresh}
+          className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          Done
+        </button>
+      </div>
+
+      {testResult && (
+        <div className={`rounded-lg border px-4 py-3 text-sm ${
+          testResult.success
+            ? 'border-green-800 bg-green-900/30 text-green-300'
+            : 'border-red-800 bg-red-900/30 text-red-300'
+        }`}>
+          {testResult.message}
         </div>
       )}
     </div>
@@ -529,9 +690,9 @@ function DecisionExplorerTab({ sessionId, provider, model }: { sessionId: string
                 </div>
 
                 {/* Utility scores */}
-                {d.probabilities && (
+                {d.probabilities != null && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {Object.entries(d.probabilities as Record<string, number>).map(([action, prob]) => (
+                    {Object.entries(d.probabilities as Record<string, number>).map(([action, prob]: [string, number]) => (
                       <span
                         key={action}
                         className={`rounded px-2 py-0.5 text-xs ${

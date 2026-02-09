@@ -151,6 +151,97 @@ class ExperimentConfig:
     outsider_injection_age: int = 20
     scheduled_injections: list[dict[str, Any]] = field(default_factory=list)
 
+    # === Social hierarchy (Phase 7) ===
+    hierarchy_config: dict[str, Any] = field(default_factory=lambda: {
+        "status_contribution_weight": 0.3,
+        "status_age_weight": 0.15,
+        "status_family_weight": 0.15,
+        "status_region_weight": 0.2,
+        "status_social_weight": 0.2,
+        "role_thresholds": {
+            "leader_percentile": 0.95,
+            "leader_extraversion_min": 0.65,
+            "innovator_creativity_min": 0.7,
+            "mediator_agreeableness_min": 0.7,
+        },
+        "influence_decay_rate": 0.1,
+    })
+    mentorship_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "max_mentees": 3,
+        "mentor_min_age": 25,
+        "mentee_max_age": 25,
+        "mentorship_influence_rate": 0.01,
+        "dissolution_compatibility_threshold": 0.2,
+        "skill_transfer_rate": 0.05,
+    })
+
+    # === Genetics (Phase 8) ===
+    genetics_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "mutation_rate": 0.001,
+        "crossover_rate": 0.5,
+        "dominance_modifier": 0.1,
+        "gene_trait_influence": 0.3,
+    })
+    epigenetics_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "transgenerational_rate": 0.3,
+        "activation_threshold_generations": 3,
+        "max_active_markers": 5,
+    })
+
+    # === Community (Phase 9) ===
+    community_config: dict[str, Any] = field(default_factory=lambda: {
+        "cohesion_trait_weight": 0.4,
+        "cohesion_bond_weight": 0.3,
+        "cohesion_culture_weight": 0.2,
+        "cohesion_conflict_weight": 0.1,
+        "faction_detection_threshold": 0.3,
+        "min_community_size": 5,
+    })
+    diplomacy_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "standing_learning_rate": 0.05,
+        "alliance_threshold": 0.7,
+        "rivalry_threshold": -0.5,
+        "cultural_exchange_rate": 0.1,
+        "trait_compatibility_weight": 0.3,
+        "leader_compatibility_weight": 0.2,
+        "resource_competition_weight": 0.25,
+        "cultural_similarity_weight": 0.25,
+    })
+
+    # === Economics (Phase 10) ===
+    economics_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "base_production_rate": 1.0,
+        "trade_distance_cost": 0.1,
+        "price_elasticity": 0.5,
+        "poverty_threshold": 0.2,
+        "poverty_mortality_multiplier": 1.5,
+        "wealth_inheritance_rate": 0.7,
+        "occupation_change_rate": 0.1,
+        "specialization_bonus": 0.3,
+    })
+
+    # === Environment (Phase 11) ===
+    environment_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "seasons_enabled": True,
+        "season_length_generations": 5,
+        "base_event_probability": 0.1,
+        "drought_probability": 0.05,
+        "flood_probability": 0.03,
+        "plague_probability": 0.02,
+        "bountiful_probability": 0.08,
+        "discovery_probability": 0.04,
+        "climate_drift_rate": 0.001,
+        "disease_transmission_rate": 0.15,
+        "disease_base_mortality": 0.1,
+        "quarantine_effectiveness": 0.5,
+    })
+
     # === Extensions ===
     extensions_enabled: list[str] = field(default_factory=list)
     extensions: dict[str, dict[str, Any]] = field(default_factory=dict)

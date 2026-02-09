@@ -79,7 +79,8 @@ class ConflictExtension(SimulationExtension):
         """Detect and resolve conflicts."""
         conf = self._get_config(config)
         ts = config.trait_system
-        rng = np.random.default_rng(config.random_seed + generation)
+        seed = (config.random_seed + generation) if config.random_seed is not None else None
+        rng = np.random.default_rng(seed)
 
         max_conflicts = conf["max_conflicts_per_generation"]
 

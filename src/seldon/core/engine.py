@@ -26,6 +26,9 @@ from seldon.core.config import ExperimentConfig
 from seldon.core.council import CognitiveCouncil
 from seldon.core.decision import DecisionContext, DecisionModel
 from seldon.core.drift import TraitDriftEngine
+from seldon.core.epigenetics import EpigeneticModel
+from seldon.core.genetic_attribution import GeneticAttribution
+from seldon.core.genetics import GeneticModel
 from seldon.core.inheritance import InheritanceEngine
 from seldon.core.processing import ProcessingClassifier, ProcessingRegion
 from seldon.experiment.outsider import OutsiderInterface, RippleTracker
@@ -134,6 +137,11 @@ class SimulationEngine:
         self.outsider_interface = OutsiderInterface(config, self.classifier)
         self.ripple_tracker = RippleTracker(config)
 
+        # Phase 8: Genetics/Epigenetics
+        self.genetic_model = GeneticModel(config)
+        self.epigenetic_model = EpigeneticModel(config)
+        self.genetic_attribution = GeneticAttribution(config)
+
         # Wire extension modifier hooks into attraction and decision models
         self.attraction.set_extension_modifiers(
             [ext.modify_attraction for ext in self.extensions.get_enabled()]
@@ -181,6 +189,13 @@ class SimulationEngine:
                 traits_at_birth=traits.copy(),
             )
             agent.processing_region = self.classifier.classify(agent)
+            # Phase 8: Generate initial genome and epigenetic state
+            if self.genetic_model.enabled:
+                agent.genome = self.genetic_model.generate_initial_genome(
+                    self.ts, agent.traits, self.rng,
+                )
+            if self.epigenetic_model.enabled:
+                agent.epigenetic_state = self.epigenetic_model.initialize_state()
             pop.append(agent)
         return pop
 
@@ -203,6 +218,12 @@ class SimulationEngine:
             agent.age += 1
             agent.traits = self.drift_engine.drift_traits(agent, self.rng)
             agent.traits = self.drift_engine.apply_region_effects(agent)
+
+        # === Phase 1.5: Epigenetic updates ===
+        if self.epigenetic_model.enabled:
+            for agent in self.population:
+                self.epigenetic_model.update_epigenetic_state(agent, self.ts)
+                self.epigenetic_model.apply_epigenetic_modifiers(agent, self.ts)
 
         # === Phase 2: Processing region updates + council voice ===
         for agent in self.population:
@@ -420,10 +441,20 @@ class SimulationEngine:
         shared_children = set(parent1.children_ids) & set(parent2.children_ids)
         birth_order = len(shared_children) + 1
 
-        # Generate traits via inheritance
-        child_traits = self.inheritance.inherit(
-            parent1, parent2, birth_order, self.population, self.rng
-        )
+        # Generate traits via inheritance (with genetic integration if enabled)
+        if self.genetic_model.enabled:
+            child_traits, genome, epi_state, lineage = (
+                self.inheritance.inherit_with_genetics(
+                    parent1, parent2, birth_order, self.population, self.rng,
+                )
+            )
+        else:
+            child_traits = self.inheritance.inherit(
+                parent1, parent2, birth_order, self.population, self.rng,
+            )
+            genome = {}
+            epi_state = {}
+            lineage = {}
 
         child = Agent(
             id=self._new_id(),
@@ -435,8 +466,15 @@ class SimulationEngine:
             traits_at_birth=child_traits.copy(),
             parent1_id=parent1.id,
             parent2_id=parent2.id,
+            genome=genome,
+            epigenetic_state=epi_state,
+            genetic_lineage=lineage,
         )
         child.processing_region = self.classifier.classify(child)
+
+        # Track genetic attribution
+        if genome:
+            self.genetic_attribution.track_inheritance(child, parent1, parent2)
 
         # Record parentage
         parent1.children_ids.append(child.id)

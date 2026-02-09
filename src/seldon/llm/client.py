@@ -53,6 +53,12 @@ class LLMClient(ABC):
 
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-4-20250514"
 
+ANTHROPIC_MODELS = [
+    "claude-sonnet-4-20250514",
+    "claude-opus-4-20250514",
+    "claude-haiku-4-20250414",
+]
+
 
 class ClaudeClient(LLMClient):
     """Thin wrapper around ``anthropic.Anthropic``."""
@@ -119,7 +125,7 @@ class ClaudeClient(LLMClient):
 # Ollama (local models)
 # ---------------------------------------------------------------------------
 
-DEFAULT_OLLAMA_MODEL = "llama3.2"
+DEFAULT_OLLAMA_MODEL = "gemma3:27b"
 
 # Inside Docker, reach the host's Ollama via host.docker.internal.
 # Native runs use localhost.

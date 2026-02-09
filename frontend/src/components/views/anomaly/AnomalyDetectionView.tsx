@@ -56,7 +56,7 @@ export function AnomalyDetectionView() {
   const overlayData = selectedAnomaly
     ? metrics.map((m, i) => ({
         generation: i,
-        value: (m as Record<string, unknown>)[selectedAnomaly.metric] as number ?? 0,
+        value: (m as unknown as Record<string, unknown>)[selectedAnomaly.metric] as number ?? 0,
       }))
     : null;
 
@@ -80,7 +80,7 @@ export function AnomalyDetectionView() {
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
               labelStyle={{ color: '#9ca3af' }}
               itemStyle={{ color: '#e5e7eb' }}
-              formatter={(value: number) => [value.toFixed(2), 'Max Z-Score']}
+              formatter={((value: number | undefined) => [(value ?? 0).toFixed(2), 'Max Z-Score']) as any}
             />
             <Bar dataKey="score" radius={[2, 2, 0, 0]}>
               {chartData.map((entry) => (

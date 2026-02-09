@@ -13,6 +13,12 @@ import { LoreEvolutionView } from './components/views/lore/LoreEvolutionView';
 import { AnomalyDetectionView } from './components/views/anomaly/AnomalyDetectionView';
 import { ParameterSensitivityView } from './components/views/sensitivity/ParameterSensitivityView';
 import { InterviewView } from './components/views/interview/InterviewView';
+import { OutsiderTrackerView } from './components/views/outsiders/OutsiderTrackerView';
+import { CommunityView } from './components/views/community/CommunityView';
+import { EconomicsView } from './components/views/economics/EconomicsView';
+import { EnvironmentView } from './components/views/environment/EnvironmentView';
+import { HierarchyView } from './components/views/hierarchy/HierarchyView';
+import { GeneticsView } from './components/views/genetics/GeneticsView';
 import { useSimulationStore } from './stores/simulation';
 import { usePolling } from './hooks/useSimulation';
 
@@ -39,6 +45,12 @@ function AppContent() {
         <Route path="/anomalies" element={<AnomalyDetectionView />} />
         <Route path="/sensitivity" element={<ParameterSensitivityView />} />
         <Route path="/interview" element={<InterviewView />} />
+        <Route path="/outsiders" element={<OutsiderTrackerView />} />
+        <Route path="/communities" element={<CommunityView />} />
+        <Route path="/economics" element={<EconomicsView />} />
+        <Route path="/environment" element={<EnvironmentView />} />
+        <Route path="/hierarchy" element={<HierarchyView />} />
+        <Route path="/genetics" element={<GeneticsView />} />
       </Route>
     </Routes>
   );

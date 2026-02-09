@@ -7,9 +7,12 @@ services:
       - "8006:8006"
     volumes:
       - ./src:/app/src
+      - ./tests:/app/tests
+      - ./.env:/app/.env:ro
+    env_file:
+      - .env
     environment:
       - DOCKER_CONTAINER=1
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

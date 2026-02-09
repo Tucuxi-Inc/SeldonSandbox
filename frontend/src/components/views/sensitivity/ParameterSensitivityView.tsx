@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
 import { useSimulationStore } from '../../../stores/simulation';
 import { EmptyState } from '../../shared/EmptyState';
@@ -136,7 +136,10 @@ export function ParameterSensitivityView() {
                   <Tooltip
                     contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
                     labelStyle={{ color: '#9ca3af' }}
-                    formatter={(value: number, name: string) => [value.toFixed(4), name === 'positive' ? 'Positive Swing' : 'Negative Swing']}
+                    formatter={((value: number | undefined, name: string | undefined) => [
+                      value != null ? value.toFixed(4) : '0',
+                      name === 'positive' ? 'Positive Swing' : 'Negative Swing',
+                    ]) as any}
                   />
                   <Bar dataKey="positive" fill={SENSITIVITY_COLORS.positive} radius={[0, 4, 4, 0]} />
                   <Bar dataKey="negative" fill={SENSITIVITY_COLORS.negative} radius={[4, 0, 0, 4]} />

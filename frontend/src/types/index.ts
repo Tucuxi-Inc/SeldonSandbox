@@ -306,7 +306,9 @@ export interface SensitivityReport {
 
 export interface LLMProviderInfo {
   available: boolean;
+  has_key?: boolean;
   models?: string[];
+  base_url?: string;
 }
 
 export interface LLMStatus {
@@ -342,4 +344,145 @@ export interface DecisionExplainResponse {
   input_tokens: number;
   output_tokens: number;
   provider: string;
+}
+
+// === Outsider Tracking ===
+
+export interface OutsiderImpact {
+  agent: AgentSummary;
+  descendant_count: number;
+  descendants: AgentSummary[];
+  trait_distance_from_mean: number;
+  injection_generation: number | null;
+  outsider_origin: string | null;
+  gender: string | null;
+}
+
+// === Community / Diplomacy ===
+
+export interface CommunityProfile {
+  id: string;
+  name: string;
+  population: number;
+  trait_means: Record<string, number>;
+  cohesion: number;
+  dominant_region: string;
+}
+
+export interface DiplomaticRelation {
+  community_a: string;
+  community_b: string;
+  standing: number;
+  status: string;
+}
+
+export interface CommunityOverview {
+  enabled: boolean;
+  communities: CommunityProfile[];
+  diplomatic_relations?: DiplomaticRelation[];
+}
+
+// === Economics ===
+
+export interface EconomicsOverview {
+  enabled: boolean;
+  gdp_by_community: Record<string, number>;
+  gini_coefficient: number;
+  total_wealth: number;
+}
+
+export interface TradeRoute {
+  from_community: string;
+  to_community: string;
+  volume: number;
+  resource: string;
+}
+
+export interface WealthDistribution {
+  enabled: boolean;
+  percentiles: Record<string, number>;
+  mean_wealth: number;
+  median_wealth: number;
+}
+
+export interface OccupationBreakdown {
+  enabled: boolean;
+  occupations: Record<string, number>;
+}
+
+// === Environment ===
+
+export interface ClimateState {
+  enabled: boolean;
+  current_season: string;
+  season_progress: number;
+  locations: Record<string, { temperature: number; rainfall: number }>;
+}
+
+export interface EnvironmentEvent {
+  generation: number;
+  type: string;
+  severity: string;
+  location_id: string | null;
+  description: string;
+}
+
+export interface DiseaseInfo {
+  name: string;
+  infection_count: number;
+  mortality_rate: number;
+  active: boolean;
+}
+
+// === Hierarchy ===
+
+export interface HierarchyOverview {
+  enabled: boolean;
+  status_distribution: Record<string, number>;
+  mean_status: number;
+}
+
+export interface RoleBreakdown {
+  enabled: boolean;
+  roles: Record<string, number>;
+}
+
+export interface InfluenceEntry {
+  agent_id: string;
+  agent_name: string;
+  influence_score: number;
+  social_role: string | null;
+}
+
+export interface MentorshipChain {
+  mentor_id: string;
+  mentor_name: string;
+  mentees: { id: string; name: string }[];
+}
+
+// === Genetics ===
+
+export interface AlleleFrequencies {
+  enabled: boolean;
+  loci: Record<string, {
+    trait: string;
+    dominant_count: number;
+    recessive_count: number;
+    dominant_frequency: number;
+    recessive_frequency: number;
+  }>;
+}
+
+export interface EpigeneticPrevalence {
+  enabled: boolean;
+  markers: Record<string, {
+    active_count: number;
+    total: number;
+    prevalence: number;
+  }>;
+}
+
+export interface TraitGeneCorrelation {
+  enabled: boolean;
+  correlations: Record<string, number>;
 }

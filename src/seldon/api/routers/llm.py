@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -9,15 +10,21 @@ from pydantic import BaseModel
 
 from seldon.api.serializers import serialize_agent_detail, serialize_agent_summary, serialize_metrics
 from seldon.llm.client import (
+    ANTHROPIC_MODELS,
     ClaudeClient,
     OllamaClient,
     LLMUnavailableError,
     create_client,
+    _ollama_base_url,
 )
 from seldon.llm.interviewer import AgentInterviewer
 from seldon.llm.narrator import DecisionNarrator, NarrativeGenerator
 
 router = APIRouter()
+
+# In-memory runtime settings
+_runtime_api_key: str | None = None
+_runtime_ollama_url: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -43,14 +50,43 @@ class ProviderSettings(BaseModel):
     model: str | None = None
 
 
+class ApiKeyRequest(BaseModel):
+    api_key: str
+
+
+class OllamaUrlRequest(BaseModel):
+    base_url: str
+
+
+class TestConnectionRequest(BaseModel):
+    provider: str
+    model: str | None = None
+    api_key: str | None = None
+    ollama_base_url: str | None = None
+
+
 # ---------------------------------------------------------------------------
 # Helper: build client on-the-fly from request params
 # ---------------------------------------------------------------------------
 
+def _get_anthropic_key() -> str | None:
+    """Get Anthropic API key: runtime override > environment variable."""
+    return _runtime_api_key or os.environ.get("ANTHROPIC_API_KEY")
+
+
+def _get_ollama_url() -> str | None:
+    """Get Ollama base URL: runtime override > auto-detected."""
+    return _runtime_ollama_url
+
+
 def _make_client(provider: str, model: str | None = None):
     """Create an LLMClient from provider name, raising HTTP 503 on failure."""
     try:
-        return create_client(provider=provider, model=model)
+        if provider == "anthropic":
+            return create_client(provider=provider, model=model, api_key=_get_anthropic_key())
+        return create_client(
+            provider=provider, model=model, ollama_base_url=_get_ollama_url(),
+        )
     except LLMUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -61,30 +97,123 @@ def _make_client(provider: str, model: str | None = None):
 
 @router.get("/status")
 def llm_status() -> dict[str, Any]:
-    """Check availability of all LLM providers."""
-    anthropic_ok = ClaudeClient.is_available()
-    ollama_ok = OllamaClient.is_available()
+    """Check availability of all LLM providers with model lists."""
+    # Check Anthropic: env var OR runtime key
+    anthropic_ok = bool(_get_anthropic_key())
+    if anthropic_ok:
+        try:
+            import anthropic  # noqa: F401
+        except ImportError:
+            anthropic_ok = False
+
+    ollama_url = _get_ollama_url()
+    ollama_ok = OllamaClient.is_available(base_url=ollama_url)
     ollama_models: list[str] = []
     if ollama_ok:
-        ollama_models = OllamaClient.list_models()
+        ollama_models = OllamaClient.list_models(base_url=ollama_url)
 
     available = anthropic_ok or ollama_ok
     if available:
         message = "LLM features available"
     else:
-        message = "No LLM provider available. Set ANTHROPIC_API_KEY or start Ollama locally."
+        message = "No LLM provider available. Set an API key for Anthropic or start Ollama."
 
     return {
         "available": available,
         "message": message,
         "providers": {
-            "anthropic": {"available": anthropic_ok},
+            "anthropic": {
+                "available": anthropic_ok,
+                "has_key": bool(_get_anthropic_key()),
+                "models": list(ANTHROPIC_MODELS) if anthropic_ok else [],
+            },
             "ollama": {
                 "available": ollama_ok,
                 "models": ollama_models,
+                "base_url": ollama_url or _ollama_base_url(),
             },
         },
     }
+
+
+@router.post("/api-key")
+def set_api_key(body: ApiKeyRequest) -> dict[str, Any]:
+    """Set the Anthropic API key at runtime (stored in-memory only)."""
+    global _runtime_api_key
+    key = body.api_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="API key cannot be empty")
+    _runtime_api_key = key
+    try:
+        ClaudeClient(api_key=key)
+        return {"status": "ok", "message": "API key set successfully"}
+    except LLMUnavailableError as exc:
+        _runtime_api_key = None
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/api-key")
+def clear_api_key() -> dict[str, Any]:
+    """Clear the runtime API key (falls back to env var)."""
+    global _runtime_api_key
+    _runtime_api_key = None
+    return {"status": "ok", "message": "Runtime API key cleared"}
+
+
+@router.post("/ollama-url")
+def set_ollama_url(body: OllamaUrlRequest) -> dict[str, Any]:
+    """Set a custom Ollama base URL at runtime."""
+    global _runtime_ollama_url
+    url = body.base_url.strip()
+    if not url:
+        _runtime_ollama_url = None
+        return {"status": "ok", "message": "Ollama URL reset to auto-detect"}
+    if not url.startswith("http"):
+        url = f"http://{url}"
+    # Verify connectivity
+    if not OllamaClient.is_available(base_url=url):
+        raise HTTPException(status_code=400, detail=f"Cannot connect to Ollama at {url}")
+    _runtime_ollama_url = url
+    models = OllamaClient.list_models(base_url=url)
+    return {"status": "ok", "message": f"Connected. {len(models)} models available.", "base_url": url}
+
+
+@router.post("/test-connection")
+def test_connection(body: TestConnectionRequest) -> dict[str, Any]:
+    """Test connectivity to a provider. Returns success/failure with details."""
+    if body.provider == "anthropic":
+        key = body.api_key or _get_anthropic_key()
+        if not key:
+            return {"success": False, "message": "No API key provided"}
+        try:
+            import anthropic  # noqa: F401
+        except ImportError:
+            return {"success": False, "message": "anthropic package not installed"}
+        try:
+            ClaudeClient(api_key=key)
+            return {
+                "success": True,
+                "message": "Connected to Anthropic API",
+                "models": list(ANTHROPIC_MODELS),
+            }
+        except LLMUnavailableError as exc:
+            return {"success": False, "message": str(exc)}
+
+    elif body.provider == "ollama":
+        url = body.ollama_base_url or _get_ollama_url()
+        ok = OllamaClient.is_available(base_url=url)
+        if not ok:
+            detected_url = url or _ollama_base_url()
+            return {"success": False, "message": f"Cannot reach Ollama at {detected_url}"}
+        models = OllamaClient.list_models(base_url=url)
+        return {
+            "success": True,
+            "message": f"Connected. {len(models)} models available.",
+            "models": models,
+            "base_url": url or _ollama_base_url(),
+        }
+
+    return {"success": False, "message": f"Unknown provider: {body.provider}"}
 
 
 @router.post("/{session_id}/interview/{agent_id}")
