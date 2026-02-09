@@ -199,7 +199,7 @@ export function AgentExplorerView() {
                     <div>
                       <span className="text-gray-500">Children: </span>
                       {selectedDetail.children_ids.map((cid, i) => (
-                        <span key={cid}>
+                        <span key={`${cid}-${i}`}>
                           {i > 0 && ', '}
                           <button onClick={() => handleSelect(cid)} className="text-blue-400 hover:underline">{cid}</button>
                         </span>
