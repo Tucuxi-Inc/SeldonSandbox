@@ -46,7 +46,12 @@ export function HierarchyView() {
 
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!hierarchy?.enabled) {
-    return <div className="p-6 text-gray-400">Social dynamics extension not enabled. Enable it in Mission Control.</div>;
+    return (
+      <div className="p-6 text-gray-400">
+        <p>Social Dynamics extension not enabled.</p>
+        <p className="mt-1 text-sm text-gray-500">Go to Mission Control and enable the "Social Dynamics" extension toggle, then create a new session.</p>
+      </div>
+    );
   }
 
   const statusData = hierarchy.status_distribution

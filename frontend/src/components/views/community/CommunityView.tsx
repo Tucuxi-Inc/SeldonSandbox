@@ -37,7 +37,12 @@ export function CommunityView() {
 
   if (loading) return <div className="p-6 text-gray-400">Loading...</div>;
   if (!data?.enabled) {
-    return <div className="p-6 text-gray-400">Community extensions not enabled. Enable geography/migration to see communities.</div>;
+    return (
+      <div className="p-6 text-gray-400">
+        <p>Communities require Geography or Migration extensions.</p>
+        <p className="mt-1 text-sm text-gray-500">Go to Mission Control and enable "Geography" (and optionally "Migration"), then create a new session.</p>
+      </div>
+    );
   }
 
   const selected = data.communities.find((c) => c.id === selectedCommunity);

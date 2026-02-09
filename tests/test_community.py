@@ -431,19 +431,22 @@ class TestCommunitiesAPIRouter:
         response = client.get(f"/api/communities/{sid}/communities")
         assert response.status_code == 200
         data = response.json()
-        assert "community_count" in data
-        assert data["community_count"] > 0
+        assert data["enabled"] is True
+        assert len(data["communities"]) > 0
         for comm in data["communities"]:
-            assert "community_id" in comm
-            assert "profile" in comm
+            assert "id" in comm
+            assert "name" in comm
+            assert "population" in comm
             assert "cohesion" in comm
+            assert "dominant_region" in comm
+            assert "trait_means" in comm
 
     def test_community_detail(self, client, session_with_communities):
         sid = session_with_communities
         # Get list first to find a community_id
         resp = client.get(f"/api/communities/{sid}/communities")
         communities = resp.json()["communities"]
-        cid = communities[0]["community_id"]
+        cid = communities[0]["id"]
         response = client.get(f"/api/communities/{sid}/communities/{cid}")
         assert response.status_code == 200
         data = response.json()
@@ -458,7 +461,7 @@ class TestCommunitiesAPIRouter:
     def test_community_factions(self, client, session_with_communities):
         sid = session_with_communities
         resp = client.get(f"/api/communities/{sid}/communities")
-        cid = resp.json()["communities"][0]["community_id"]
+        cid = resp.json()["communities"][0]["id"]
         response = client.get(f"/api/communities/{sid}/communities/{cid}/factions")
         assert response.status_code == 200
         data = response.json()
@@ -488,6 +491,23 @@ class TestCommunitiesAPIRouter:
         assert response.status_code == 200
         data = response.json()
         assert data["enabled"] is False
+
+    def test_communities_disabled_without_geography(self, client):
+        """Communities should return enabled=False without geography."""
+        response = client.post("/api/simulation/sessions", json={
+            "config": {
+                "initial_population": 10,
+                "generations_to_run": 3,
+                "random_seed": 42,
+            },
+        })
+        sid = response.json()["id"]
+        client.post(f"/api/simulation/sessions/{sid}/step", json={"n": 1})
+        response = client.get(f"/api/communities/{sid}/communities")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["enabled"] is False
+        assert data["communities"] == []
 
     def test_compare_communities(self, client, session_with_communities):
         sid = session_with_communities

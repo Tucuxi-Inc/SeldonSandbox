@@ -28,30 +28,54 @@ def _get_diplomacy_extension(session):
     return None
 
 
+def _has_geography(session) -> bool:
+    """Check if geography/migration extensions are active (needed for meaningful communities)."""
+    for ext in session.engine.extensions.get_enabled():
+        if ext.name in ("geography", "migration"):
+            return True
+    return False
+
+
 @router.get("/{session_id}/communities")
 def list_communities(request: Request, session_id: str):
     """List all communities with personality profiles."""
     session = _get_session(request, session_id)
     config = session.config
-    cm = CommunityManager(config)
     population = session.engine.population
+
+    # Communities require geography/migration for meaningful groupings
+    if not _has_geography(session):
+        return {
+            "enabled": False,
+            "communities": [],
+        }
+
+    cm = CommunityManager(config)
     communities = cm.get_communities(population)
 
     result = []
     for cid, agents in communities.items():
         profile = cm.compute_personality_profile(agents)
         cohesion = cm.compute_cohesion(agents)
-        identity = cm.compute_identity(agents, communities, cid)
         result.append({
-            "community_id": cid,
-            "profile": profile,
+            "id": cid,
+            "name": f"Community {cid}" if cid != "default" else "Default Community",
+            "population": profile.get("size", len(agents)),
+            "trait_means": profile.get("trait_means", {}),
             "cohesion": round(cohesion, 4),
-            "identity": identity,
+            "dominant_region": profile.get("dominant_region", "unknown"),
         })
 
+    # Also fetch diplomatic relations if diplomacy is enabled
+    ext = _get_diplomacy_extension(session)
+    diplomatic_relations = None
+    if ext is not None:
+        diplomatic_relations = ext.get_all_relations()
+
     return {
-        "community_count": len(result),
+        "enabled": True,
         "communities": result,
+        "diplomatic_relations": diplomatic_relations,
     }
 
 

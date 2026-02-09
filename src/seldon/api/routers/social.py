@@ -20,68 +20,67 @@ def _get_session(request: Request, session_id: str):
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
 
+def _is_social_dynamics_enabled(session) -> bool:
+    """Check if the social_dynamics extension is active."""
+    for ext in session.engine.extensions.get_enabled():
+        if ext.name == "social_dynamics":
+            return True
+    return False
+
+
 @router.get("/{session_id}/hierarchy")
-def get_hierarchy(request: Request, session_id: str, page: int = 1, page_size: int = 50):
-    """Get all agents with their social status, role, and influence."""
+def get_hierarchy(request: Request, session_id: str):
+    """Get social hierarchy overview: status distribution and mean status."""
     session = _get_session(request, session_id)
-    ts = session.config.trait_system
+
+    if not _is_social_dynamics_enabled(session):
+        return {"enabled": False}
+
     population = session.engine.population
 
-    # Sort by status descending
-    sorted_agents = sorted(population, key=lambda a: a.social_status, reverse=True)
+    # Compute status distribution (bucketed)
+    buckets = {"0.0-0.2": 0, "0.2-0.4": 0, "0.4-0.6": 0, "0.6-0.8": 0, "0.8-1.0": 0}
+    total_status = 0.0
+    for a in population:
+        s = float(a.social_status)
+        total_status += s
+        if s < 0.2:
+            buckets["0.0-0.2"] += 1
+        elif s < 0.4:
+            buckets["0.2-0.4"] += 1
+        elif s < 0.6:
+            buckets["0.4-0.6"] += 1
+        elif s < 0.8:
+            buckets["0.6-0.8"] += 1
+        else:
+            buckets["0.8-1.0"] += 1
 
-    # Paginate
-    start = (page - 1) * page_size
-    end = start + page_size
-    page_agents = sorted_agents[start:end]
+    mean_status = total_status / max(len(population), 1)
 
     return {
-        "total": len(population),
-        "page": page,
-        "page_size": page_size,
-        "agents": [
-            {
-                "id": a.id,
-                "name": a.name,
-                "age": _int(a.age),
-                "social_status": round(float(a.social_status), 4),
-                "social_role": a.social_role,
-                "influence_score": round(float(a.influence_score), 4),
-                "processing_region": a.processing_region.value,
-                "mentor_id": a.mentor_id,
-                "mentee_count": len(a.mentee_ids),
-                "bond_count": len(a.social_bonds),
-            }
-            for a in page_agents
-        ],
+        "enabled": True,
+        "status_distribution": buckets,
+        "mean_status": round(mean_status, 4),
     }
 
 
-@router.get("/{session_id}/hierarchy/roles")
+@router.get("/{session_id}/roles")
 def get_role_distribution(request: Request, session_id: str):
-    """Get role distribution counts and agent lists per role."""
+    """Get role distribution counts."""
     session = _get_session(request, session_id)
-    population = session.engine.population
 
-    roles: dict[str, list[dict]] = {}
+    if not _is_social_dynamics_enabled(session):
+        return {"enabled": False, "roles": {}}
+
+    population = session.engine.population
+    roles: dict[str, int] = {}
     for agent in population:
         role = agent.social_role or "unassigned"
-        if role not in roles:
-            roles[role] = []
-        roles[role].append({
-            "id": agent.id,
-            "name": agent.name,
-            "social_status": round(float(agent.social_status), 4),
-        })
+        roles[role] = roles.get(role, 0) + 1
 
     return {
-        "roles": {
-            role: {
-                "count": len(agents),
-                "agents": agents[:10],  # Top 10 per role
-            }
-            for role, agents in sorted(roles.items())
-        },
+        "enabled": True,
+        "roles": roles,
     }
 
 
@@ -89,57 +88,59 @@ def get_role_distribution(request: Request, session_id: str):
 def get_mentorship(request: Request, session_id: str):
     """Get all active mentorship pairs with chain info."""
     session = _get_session(request, session_id)
+
+    if not _is_social_dynamics_enabled(session):
+        return {"enabled": False, "chains": []}
+
     population = session.engine.population
 
-    from seldon.social.mentorship import MentorshipManager
-    mm = MentorshipManager(session.config)
-    chains = mm.get_mentorship_chains(population)
+    # Build mentor → mentees mapping
+    mentor_map: dict[str, list[dict]] = {}
+    agent_lookup = {a.id: a for a in population}
+    for a in population:
+        if a.mentor_id is not None and a.mentor_id in agent_lookup:
+            if a.mentor_id not in mentor_map:
+                mentor_map[a.mentor_id] = []
+            mentor_map[a.mentor_id].append({"id": a.id, "name": a.name})
 
-    # Count active mentorships
-    active_pairs = [
+    chains = [
         {
-            "mentor_id": a.mentor_id,
-            "mentee_id": a.id,
-            "mentee_name": a.name,
+            "mentor_id": mid,
+            "mentor_name": agent_lookup[mid].name,
+            "mentees": mentees,
         }
-        for a in population
-        if a.mentor_id is not None
+        for mid, mentees in mentor_map.items()
     ]
 
     return {
-        "active_count": len(active_pairs),
-        "pairs": active_pairs,
+        "enabled": True,
         "chains": chains,
     }
 
 
 @router.get("/{session_id}/influence-map")
 def get_influence_map(request: Request, session_id: str):
-    """Get influence scores and top-10 most influential agents."""
+    """Get influence scores and top agents."""
     session = _get_session(request, session_id)
+
+    if not _is_social_dynamics_enabled(session):
+        return {"enabled": False, "agents": []}
+
     population = session.engine.population
 
     sorted_by_influence = sorted(
         population, key=lambda a: a.influence_score, reverse=True,
     )
 
-    top_10 = sorted_by_influence[:10]
-
     return {
-        "total_agents": len(population),
-        "mean_influence": round(
-            sum(a.influence_score for a in population) / max(len(population), 1), 4,
-        ),
-        "top_agents": [
+        "enabled": True,
+        "agents": [
             {
-                "id": a.id,
-                "name": a.name,
+                "agent_id": a.id,
+                "agent_name": a.name,
                 "influence_score": round(float(a.influence_score), 4),
-                "social_status": round(float(a.social_status), 4),
                 "social_role": a.social_role,
-                "bond_count": len(a.social_bonds),
-                "mentee_count": len(a.mentee_ids),
             }
-            for a in top_10
+            for a in sorted_by_influence[:30]
         ],
     }

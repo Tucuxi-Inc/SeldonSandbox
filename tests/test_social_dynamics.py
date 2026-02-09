@@ -635,45 +635,49 @@ class TestSocialAPIRouter:
         resp = client.get(f"/api/social/{session_with_social}/hierarchy")
         assert resp.status_code == 200
         data = resp.json()
-        assert "total" in data
-        assert "agents" in data
-        assert len(data["agents"]) > 0
-        agent = data["agents"][0]
-        assert "social_status" in agent
-        assert "social_role" in agent
-        assert "influence_score" in agent
+        assert data["enabled"] is True
+        assert "status_distribution" in data
+        assert "mean_status" in data
+        assert isinstance(data["status_distribution"], dict)
 
-    def test_hierarchy_pagination(self, client, session_with_social):
-        resp = client.get(f"/api/social/{session_with_social}/hierarchy?page=1&page_size=5")
+    def test_hierarchy_disabled(self, client):
+        """Hierarchy should return enabled=False without social_dynamics extension."""
+        resp = client.post("/api/simulation/sessions", json={
+            "config": {
+                "initial_population": 10,
+                "generations_to_run": 5,
+                "random_seed": 42,
+            },
+        })
+        sid = resp.json()["id"]
+        client.post(f"/api/simulation/sessions/{sid}/step", json={"n": 1})
+        resp = client.get(f"/api/social/{sid}/hierarchy")
         assert resp.status_code == 200
-        data = resp.json()
-        assert len(data["agents"]) <= 5
+        assert resp.json()["enabled"] is False
 
     def test_roles_endpoint(self, client, session_with_social):
-        resp = client.get(f"/api/social/{session_with_social}/hierarchy/roles")
+        resp = client.get(f"/api/social/{session_with_social}/roles")
         assert resp.status_code == 200
         data = resp.json()
+        assert data["enabled"] is True
         assert "roles" in data
-        for role_name, role_data in data["roles"].items():
-            assert "count" in role_data
-            assert "agents" in role_data
+        assert isinstance(data["roles"], dict)
 
     def test_mentorship_endpoint(self, client, session_with_social):
         resp = client.get(f"/api/social/{session_with_social}/mentorship")
         assert resp.status_code == 200
         data = resp.json()
-        assert "active_count" in data
-        assert "pairs" in data
+        assert data["enabled"] is True
         assert "chains" in data
+        assert isinstance(data["chains"], list)
 
     def test_influence_map_endpoint(self, client, session_with_social):
         resp = client.get(f"/api/social/{session_with_social}/influence-map")
         assert resp.status_code == 200
         data = resp.json()
-        assert "total_agents" in data
-        assert "mean_influence" in data
-        assert "top_agents" in data
-        assert len(data["top_agents"]) <= 10
+        assert data["enabled"] is True
+        assert "agents" in data
+        assert isinstance(data["agents"], list)
 
     def test_hierarchy_404(self, client):
         resp = client.get("/api/social/nonexistent/hierarchy")
