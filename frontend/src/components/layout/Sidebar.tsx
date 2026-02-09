@@ -11,6 +11,7 @@ import {
   BookOpen,
   AlertTriangle,
   SlidersHorizontal,
+  MessageSquare,
 } from 'lucide-react';
 
 const coreNavItems = [
@@ -28,6 +29,10 @@ const advancedNavItems = [
   { to: '/lore', icon: BookOpen, label: 'Lore Evolution' },
   { to: '/anomalies', icon: AlertTriangle, label: 'Anomalies' },
   { to: '/sensitivity', icon: SlidersHorizontal, label: 'Sensitivity' },
+];
+
+const llmNavItems = [
+  { to: '/interview', icon: MessageSquare, label: 'Agent Interview' },
 ];
 
 function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ComponentType<{ size?: number }>; label: string }) {
@@ -57,7 +62,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-100">Seldon Sandbox</div>
-          <div className="text-xs text-gray-500">v0.4.0</div>
+          <div className="text-xs text-gray-500">v0.5.0</div>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -71,6 +76,15 @@ export function Sidebar() {
         </div>
 
         {advancedNavItems.map((item) => (
+          <NavItem key={item.to} {...item} />
+        ))}
+
+        <div className="my-2 border-t border-gray-800" />
+        <div className="px-3 py-1 text-xs font-semibold uppercase tracking-wider text-gray-600">
+          LLM
+        </div>
+
+        {llmNavItems.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}
       </nav>

@@ -12,6 +12,7 @@ import { NetworkView } from './components/views/network/NetworkView';
 import { LoreEvolutionView } from './components/views/lore/LoreEvolutionView';
 import { AnomalyDetectionView } from './components/views/anomaly/AnomalyDetectionView';
 import { ParameterSensitivityView } from './components/views/sensitivity/ParameterSensitivityView';
+import { InterviewView } from './components/views/interview/InterviewView';
 import { useSimulationStore } from './stores/simulation';
 import { usePolling } from './hooks/useSimulation';
 
@@ -37,6 +38,7 @@ function AppContent() {
         <Route path="/lore" element={<LoreEvolutionView />} />
         <Route path="/anomalies" element={<AnomalyDetectionView />} />
         <Route path="/sensitivity" element={<ParameterSensitivityView />} />
+        <Route path="/interview" element={<InterviewView />} />
       </Route>
     </Routes>
   );

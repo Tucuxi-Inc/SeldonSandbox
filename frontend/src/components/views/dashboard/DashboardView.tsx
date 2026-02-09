@@ -123,6 +123,86 @@ export function DashboardView() {
               <ToggleField label="Lore Enabled" value={config.lore_enabled as boolean} onChange={(v) => updateConfig('lore_enabled', v)} />
               <ToggleField label="Cognitive Council" value={config.cognitive_council_enabled as boolean} onChange={(v) => updateConfig('cognitive_council_enabled', v)} />
             </div>
+
+            {/* Extension Toggles */}
+            <div className="mt-4">
+              <div className="mb-2 text-sm font-medium text-gray-400">Extensions</div>
+              <div className="flex flex-wrap items-center gap-4">
+                <ToggleField
+                  label="Geography"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('geography')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v) {
+                      if (!current.includes('geography')) current.push('geography');
+                    } else {
+                      const idx = current.indexOf('geography');
+                      if (idx >= 0) current.splice(idx, 1);
+                      // Disabling geography also disables migration
+                      const mIdx = current.indexOf('migration');
+                      if (mIdx >= 0) current.splice(mIdx, 1);
+                    }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+                <ToggleField
+                  label="Migration"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('migration')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v) {
+                      if (!current.includes('migration')) current.push('migration');
+                      // Migration requires geography
+                      if (!current.includes('geography')) current.push('geography');
+                    } else {
+                      const idx = current.indexOf('migration');
+                      if (idx >= 0) current.splice(idx, 1);
+                    }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+                <ToggleField
+                  label="Resources"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('resources')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v && !current.includes('resources')) current.push('resources');
+                    if (!v) { const idx = current.indexOf('resources'); if (idx >= 0) current.splice(idx, 1); }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+                <ToggleField
+                  label="Technology"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('technology')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v && !current.includes('technology')) current.push('technology');
+                    if (!v) { const idx = current.indexOf('technology'); if (idx >= 0) current.splice(idx, 1); }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+                <ToggleField
+                  label="Culture"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('culture')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v && !current.includes('culture')) current.push('culture');
+                    if (!v) { const idx = current.indexOf('culture'); if (idx >= 0) current.splice(idx, 1); }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+                <ToggleField
+                  label="Conflict"
+                  value={((config.extensions_enabled as string[]) ?? []).includes('conflict')}
+                  onChange={(v) => {
+                    const current = ((config.extensions_enabled as string[]) ?? []).slice();
+                    if (v && !current.includes('conflict')) current.push('conflict');
+                    if (!v) { const idx = current.indexOf('conflict'); if (idx >= 0) current.splice(idx, 1); }
+                    updateConfig('extensions_enabled', current);
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
           {/* Simulation Controls */}

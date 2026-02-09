@@ -301,3 +301,45 @@ export interface SensitivityReport {
   sensitivities: ParameterSensitivity[];
   tornado_data: TornadoBar[];
 }
+
+// === LLM ===
+
+export interface LLMProviderInfo {
+  available: boolean;
+  models?: string[];
+}
+
+export interface LLMStatus {
+  available: boolean;
+  message: string;
+  providers: {
+    anthropic: LLMProviderInfo;
+    ollama: LLMProviderInfo;
+  };
+}
+
+export interface InterviewResponse {
+  response: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  provider: string;
+}
+
+export interface NarrativeResponse {
+  narrative: string;
+  generation: number;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  provider: string;
+}
+
+export interface DecisionExplainResponse {
+  explanation: string;
+  decision: Record<string, unknown>;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  provider: string;
+}

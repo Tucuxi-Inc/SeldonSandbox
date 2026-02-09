@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from seldon.api.sessions import SessionManager
-from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced
+from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced, llm
 
 
 def create_app() -> FastAPI:
@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     application = FastAPI(
         title="Seldon Sandbox API",
         description="REST API for the Seldon Sandbox simulation engine",
-        version="0.4.0",
+        version="0.5.0",
     )
 
     application.add_middleware(
@@ -34,6 +34,7 @@ def create_app() -> FastAPI:
     application.include_router(settlements.router, prefix="/api/settlements", tags=["settlements"])
     application.include_router(network.router, prefix="/api/network", tags=["network"])
     application.include_router(advanced.router, prefix="/api/advanced", tags=["advanced"])
+    application.include_router(llm.router, prefix="/api/llm", tags=["llm"])
 
     @application.get("/api/health")
     def health_check():

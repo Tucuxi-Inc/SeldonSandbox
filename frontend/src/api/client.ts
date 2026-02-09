@@ -21,6 +21,10 @@ import type {
   MigrationHistory,
   NetworkGraph,
   SensitivityReport,
+  LLMStatus,
+  InterviewResponse,
+  NarrativeResponse,
+  DecisionExplainResponse,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -227,6 +231,58 @@ export async function getNetworkGraph(
 ): Promise<NetworkGraph> {
   const { data } = await api.get(`/network/${sessionId}/graph`, {
     params: { bond_threshold: bondThreshold },
+  });
+  return data;
+}
+
+// === LLM ===
+
+export async function getLLMStatus(): Promise<LLMStatus> {
+  const { data } = await api.get('/llm/status');
+  return data;
+}
+
+export async function interviewAgent(
+  sessionId: string,
+  agentId: string,
+  question: string,
+  conversationHistory?: { role: string; content: string }[],
+  provider: string = 'anthropic',
+  model?: string,
+): Promise<InterviewResponse> {
+  const { data } = await api.post(`/llm/${sessionId}/interview/${agentId}`, {
+    question,
+    conversation_history: conversationHistory,
+    provider,
+    model: model || undefined,
+  });
+  return data;
+}
+
+export async function getGenerationNarrative(
+  sessionId: string,
+  generation: number,
+  provider: string = 'anthropic',
+  model?: string,
+): Promise<NarrativeResponse> {
+  const { data } = await api.get(`/llm/${sessionId}/narrative/${generation}`, {
+    params: { provider, model: model || undefined },
+  });
+  return data;
+}
+
+export async function explainDecision(
+  sessionId: string,
+  agentId: string,
+  decisionIndex: number,
+  provider: string = 'anthropic',
+  model?: string,
+): Promise<DecisionExplainResponse> {
+  const { data } = await api.post(`/llm/${sessionId}/decision-explain`, {
+    agent_id: agentId,
+    decision_index: decisionIndex,
+    provider,
+    model: model || undefined,
   });
   return data;
 }
