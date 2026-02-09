@@ -26,11 +26,22 @@ export function DashboardView() {
     api.getArchetypes().then(setArchetypes).catch(() => {});
   }, []);
 
+  const defaults: Record<string, unknown> = {
+    initial_population: 100,
+    generations_to_run: 50,
+    random_seed: 42,
+    trait_drift_rate: 0.02,
+    lore_enabled: true,
+    cognitive_council_enabled: false,
+  };
+
   const handlePresetChange = (name: string) => {
     setSelectedPreset(name);
     const preset = presets.find((p) => p.name === name);
     if (preset) {
-      setConfig({ ...config, ...preset.config });
+      setConfig({ ...defaults, ...preset.config });
+    } else {
+      setConfig({ ...defaults });
     }
   };
 
@@ -225,15 +236,16 @@ function SliderField({ label, value, min, max, step, onChange }: {
   label: string; value: number; min: number; max: number; step: number;
   onChange: (v: number) => void;
 }) {
+  const safeValue = value ?? min;
   return (
     <div>
       <div className="flex items-center justify-between">
         <label className="text-sm text-gray-400">{label}</label>
-        <span className="font-mono text-sm text-gray-300">{value}</span>
+        <span className="font-mono text-sm text-gray-300">{safeValue}</span>
       </div>
       <input
         type="range"
-        min={min} max={max} step={step} value={value}
+        min={min} max={max} step={step} value={safeValue}
         onChange={(e) => onChange(Number(e.target.value))}
         className="mt-1 w-full accent-blue-600"
       />
@@ -248,7 +260,7 @@ function ToggleField({ label, value, onChange }: {
     <label className="flex items-center gap-2 text-sm text-gray-400 cursor-pointer">
       <input
         type="checkbox"
-        checked={value}
+        checked={value ?? false}
         onChange={(e) => onChange(e.target.checked)}
         className="rounded border-gray-600 bg-gray-800 text-blue-600 accent-blue-600"
       />
