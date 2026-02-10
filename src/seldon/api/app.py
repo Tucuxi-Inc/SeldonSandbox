@@ -34,7 +34,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    application.state.session_manager = SessionManager()
+    db_path = os.environ.get("SELDON_DB_PATH", "data/seldon.db")
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
+    application.state.session_manager = SessionManager(db_path=db_path)
 
     application.include_router(simulation.router, prefix="/api/simulation", tags=["simulation"])
     application.include_router(metrics.router, prefix="/api/metrics", tags=["metrics"])

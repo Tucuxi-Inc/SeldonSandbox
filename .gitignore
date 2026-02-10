@@ -35,6 +35,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/.next/
 
+# Data (SQLite persistence)
+data/*.db
+
 # Environment
 .env
 .env.local
