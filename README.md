@@ -28,6 +28,7 @@ Built by [Kevin Keller](https://github.com/kkeller-tucuxi) of [Tucuxi Inc](https
 - [Archetypes](#archetypes)
 - [Running Experiments from Python](#running-experiments-from-python)
 - [API Reference](#api-reference)
+- [Session Persistence](#session-persistence)
 - [Tests](#tests)
 - [Project Structure](#project-structure)
 - [Design Principles](#design-principles)
@@ -114,6 +115,21 @@ docker compose build frontend --no-cache
 docker compose up -d
 ```
 
+### Session Persistence in Docker
+
+Session data is stored in a SQLite database on a named Docker volume (`seldon-data`), so **sessions survive container restarts and rebuilds**. The database is stored at `/app/data/seldon.db` inside the container.
+
+```bash
+# Sessions persist across restarts
+docker compose restart backend
+
+# Sessions persist across rebuilds
+docker compose up --build
+
+# To wipe session data, remove the volume
+docker compose down -v
+```
+
 ### Environment variables
 
 Create a `.env` file in the project root (already gitignored):
@@ -124,6 +140,9 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional: custom Ollama host (default auto-detects Docker vs local)
 OLLAMA_HOST=http://host.docker.internal:11434
+
+# Optional: custom database path (default: data/seldon.db)
+SELDON_DB_PATH=data/seldon.db
 ```
 
 The API key is passed into the Docker container automatically via the `env_file` directive in `docker-compose.yml`. Without it, the simulation runs normally -- LLM features just show an "unavailable" banner.
@@ -149,9 +168,12 @@ services:
     ports:
       - "8006:8006"
     volumes:
-      - ./src:/app/src          # Live backend code reload
+      - ./src:/app/src              # Live backend code reload
+      - ./tests:/app/tests          # Live test reload
+      - ./.env:/app/.env:ro         # Environment file
+      - seldon-data:/app/data       # Persistent session storage
     env_file:
-      - .env                    # Loads ANTHROPIC_API_KEY, OLLAMA_HOST, etc.
+      - .env                        # Loads ANTHROPIC_API_KEY, OLLAMA_HOST, etc.
     extra_hosts:
       - "host.docker.internal:host-gateway"  # Required for Ollama access
 
@@ -160,9 +182,12 @@ services:
       context: .
       dockerfile: Dockerfile.frontend
     ports:
-      - "3006:80"
+      - "3006:3006"
     depends_on:
       - backend
+
+volumes:
+  seldon-data:                      # Named volume for SQLite persistence
 ```
 
 ### Rebuilding
@@ -219,7 +244,7 @@ The Vite dev server on port 3006 automatically proxies `/api` requests to the ba
 pytest tests/
 ```
 
-569 tests covering the core engine, genetics, social dynamics, extensions, API endpoints, and LLM integration. All LLM tests use mocked clients -- no real API calls.
+598 tests covering the core engine, genetics, social dynamics, extensions, API endpoints, persistence, and LLM integration. All LLM tests use mocked clients -- no real API calls.
 
 ---
 
@@ -328,6 +353,8 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
     +-- METRICS & API
         +-- MetricsCollector ...... per-generation statistics
         +-- FastAPI REST API ...... 13 routers, 50+ endpoints
+        +-- SessionManager ........ in-memory sessions with SQLite persistence
+        +-- SessionStore .......... SQLite CRUD, zlib-compressed state blobs
         +-- React Dashboard ....... 18 views, real-time updates
 ```
 
@@ -895,9 +922,69 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 
 ---
 
+## Session Persistence
+
+Sessions are automatically persisted to a SQLite database, so they survive backend restarts, Docker rebuilds, and container recreation.
+
+### How It Works
+
+- **Auto-save**: Every mutation (create, step, run, reset, delete) saves the session to SQLite
+- **Lazy loading**: On startup, only session metadata is loaded; full state is deserialized on first access
+- **Compressed storage**: Full session state (all agents, metrics history, engine state) is serialized as zlib-compressed JSON blobs
+- **Graceful fallback**: If the database can't be created, the system works in memory-only mode with no errors
+
+### What's Persisted
+
+- All agent data (traits, history, relationships, genetics, social status, decisions, memories)
+- Full metrics history (all GenerationMetrics for every generation)
+- Session metadata (name, status, generation, population size)
+- Engine state (next agent ID, previous region tracking for transitions)
+- Experiment configuration
+
+### What's NOT Persisted (Rebuilt on Load)
+
+- Extension internal state (settlements, resource pools, trade markets) -- rebuilt via `on_simulation_start()`
+- Lore engine's societal consensus list -- rebuilt from agent memories
+- RippleTracker snapshots -- outsiders still tracked via agent `is_outsider` flag
+- Exact RNG state -- reseeded deterministically as `seed + current_generation`
+
+### Configuration
+
+```bash
+# Environment variable (default: data/seldon.db)
+export SELDON_DB_PATH=data/seldon.db
+
+# Docker: uses named volume (seldon-data) at /app/data
+# Local dev: creates data/ directory in project root
+
+# Disable persistence (in-memory only)
+export SELDON_DB_PATH=""
+```
+
+### Database Schema
+
+A single `sessions` table with metadata columns for fast listing and a zlib-compressed blob for full state:
+
+```sql
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'created',
+    current_generation INTEGER NOT NULL DEFAULT 0,
+    max_generations INTEGER NOT NULL DEFAULT 0,
+    population_size INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    config_json TEXT NOT NULL,
+    state_blob BLOB
+);
+```
+
+---
+
 ## Tests
 
-569 tests across 27 test files covering all layers of the system.
+598 tests across 28 test files covering all layers of the system.
 
 ```bash
 # Run all tests
@@ -942,6 +1029,8 @@ pytest --cov=seldon tests/
 | `test_community.py` | Community detection, diplomatic relations |
 | `test_economics.py` | Production, trade, wealth distribution |
 | `test_environment.py` | Seasons, climate, events, disease |
+| `test_persistence.py` | Agent serialization roundtrips, SessionStore CRUD, state blob compression, full restart integration |
+| `conftest.py` | Shared fixtures (DB isolation via temp path) |
 
 All LLM tests use mocked clients. No real API calls are made during testing.
 
@@ -963,10 +1052,10 @@ seldon-sandbox/
 |   |                   #   (geography, migration, resources, technology, culture,
 |   |                   #    conflict, social_dynamics, diplomacy, economics, environment)
 |   +-- llm/            # ClaudeClient, OllamaClient, Interviewer, Narrator, Prompts
-|   +-- api/            # FastAPI app, SessionManager, Serializers, 13 routers
-|                       #   (simulation, agents, metrics, experiments, settlements,
-|                       #    network, advanced, llm, social, communities, economics,
-|                       #    environment, genetics)
+|   +-- api/            # FastAPI app, SessionManager, SessionStore (SQLite persistence),
+|                       #   Serializers, 13 routers (simulation, agents, metrics,
+|                       #   experiments, settlements, network, advanced, llm, social,
+|                       #   communities, economics, environment, genetics)
 +-- frontend/           # React + TypeScript + Tailwind v4 + Recharts + D3
 |   +-- src/
 |       +-- components/
@@ -976,7 +1065,7 @@ seldon-sandbox/
 |       +-- api/client.ts      # API client (50+ functions)
 |       +-- stores/            # Zustand state management
 |       +-- types/             # TypeScript interfaces
-+-- tests/              # 569 tests (pytest)
++-- tests/              # 598 tests (pytest)
 +-- examples/           # CLI example scripts
 +-- docs/               # Architecture docs, conversation transcripts
 +-- docker-compose.yml  # One-command deployment
@@ -1003,6 +1092,8 @@ seldon-sandbox/
 7. **LLM for interviews only.** The simulation runs on pure math. LLMs are a narrative layer for explaining what happened, not for determining what happens.
 
 8. **Full determinism.** Every random operation flows through a seeded `numpy.random.Generator`. Same seed = same results. Always.
+
+9. **Sessions are durable.** Every session mutation auto-saves to SQLite. Restarts don't lose work. Lazy loading keeps startup fast. Persistence failures never crash the system.
 
 ---
 

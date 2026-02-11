@@ -25,42 +25,60 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
     └── EXPERIMENT CONFIG (all parameters as tunable sliders)
             ├── CORE ENGINE
             │   ├── TraitSystem (configurable: 15 compact / 50 full / custom)
-            │   ├── Agent (dataclass with history, lore, decision tracking)
+            │   ├── Agent (dataclass with traits, history, lore, decisions, genome)
             │   ├── DecisionModel (utility-based, all choices flow through this)
             │   ├── CognitiveCouncil (optional 8-voice modulation layer)
             │   ├── InheritanceEngine (birth order: worst/weirdest/best/random/average)
             │   ├── ProcessingClassifier (RSH Five Regions)
             │   ├── TraitDriftEngine (experience + age-based trait changes)
             │   ├── AttractionModel (similarity, complementarity, chemistry)
-            │   └── SimulationEngine (generation loop with extension hooks)
+            │   ├── SimulationEngine (9-phase generation loop with extension hooks)
+            │   ├── GeneticModel (allele pairs, crossover, mutation, expression)
+            │   ├── EpigeneticModel (environmental markers, transgenerational inheritance)
+            │   └── GeneticAttribution (lineage tracking, trait-gene correlation)
             ├── SOCIAL
             │   ├── RelationshipManager (pairing, dissolution, infidelity)
             │   ├── FertilityManager (constraints, societal pressure)
-            │   └── LoreEngine (memory transmission, fidelity decay, myths)
+            │   ├── LoreEngine (memory transmission, fidelity decay, myths)
+            │   ├── SocialHierarchyManager (status, influence, role assignment)
+            │   ├── MentorshipManager (matching, skill transfer, chains)
+            │   └── CommunityManager (detection, cohesion, factions)
             ├── EXPERIMENT
             │   ├── ExperimentRunner, Presets
             │   ├── Archetypes (11 seed vectors: Da Vinci, Einstein, Curie, etc.)
             │   └── OutsiderInterface + RippleTracker
-            ├── EXTENSIONS (optional, via ExtensionRegistry)
+            ├── EXTENSIONS (optional, via ExtensionRegistry — 10 modules)
             │   ├── Geography, Migration (settlement composition analysis)
             │   ├── Resources, Technology
             │   ├── Culture/Memes, Conflict
+            │   ├── Social Dynamics (hierarchy + mentorship wired into hooks)
+            │   ├── Diplomacy (alliances, rivalries, cultural exchange)
+            │   ├── Economics (production, trade, wealth, occupations)
+            │   ├── Environment (seasons, climate, drought, plague, disease)
             │   └── SimulationExtension ABC with lifecycle + modifier hooks
-            └── METRICS & VISUALIZATION
+            ├── LLM (narrative layer, never affects simulation)
+            │   ├── ClaudeClient (Anthropic API) + OllamaClient (local, Docker-aware)
+            │   ├── AgentInterviewer (in-character conversations)
+            │   ├── NarrativeGenerator (prose summaries)
+            │   └── DecisionNarrator (psychological analysis)
+            └── METRICS, API & PERSISTENCE
                 ├── MetricsCollector (per-generation stats)
-                └── 10 narrative visualization views (React dashboard)
+                ├── SessionManager (in-memory sessions with SQLite persistence)
+                ├── SessionStore (SQLite CRUD, zlib-compressed state blobs)
+                ├── FastAPI REST API (13 routers, 50+ endpoints)
+                └── React Dashboard (18 views, real-time updates)
 ```
 
-### Generation Loop Phases (7 phases in order)
+### Generation Loop Phases (9 phases in order)
 1. **Age & Trait Drift** — Agents age, traits shift via drift engine and region effects
-2. **Processing Region Updates** — Reclassify agents into RSH Five Regions; update dominant cognitive voice
-3. **Contribution & Breakthroughs** — Calculate output, detect breakthroughs, create memories
-4. **Relationship Dynamics** — Process dissolutions, form new pairs via decision model
-5. **Reproduction** — Paired agents produce children via inheritance engine; transmit lore
-6. **Lore Evolution** — Societal-level memory consensus, conflict, mutation
-7. **Mortality** — Age/burnout/extension-modified death checks; handle widowing
-
-Extension hooks fire at: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, get metrics.
+2. **Epigenetic Updates** — Environmental markers activate/deactivate based on conditions (Phase 1.5, when genetics enabled)
+3. **Processing Region Updates** — Reclassify agents into RSH Five Regions; update dominant cognitive voice
+4. **Contribution & Breakthroughs** — Calculate output, detect breakthroughs, create memories
+5. **Relationship Dynamics** — Process dissolutions, form new pairs via decision model
+6. **Reproduction** — Paired agents produce children via inheritance engine (optionally with allele-based genetics); transmit lore
+7. **Lore Evolution** — Societal-level memory consensus, conflict, mutation
+8. **Mortality** — Age/burnout/extension-modified death checks; handle widowing
+9. **Extension Hooks** — Extensions fire at 8 lifecycle points: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, collect metrics
 
 ## The RSH Five Regions Model
 
@@ -147,28 +165,34 @@ agent.suffering_history.append(agent.suffering)
 seldon-sandbox/
 ├── src/seldon/
 │   ├── core/          # TraitSystem, Agent, Config, Engine, Inheritance,
-│   │                  #   Processing, Drift, Attraction, DecisionModel, CognitiveCouncil
-│   ├── social/        # RelationshipManager, FertilityManager, LoreEngine
+│   │                  #   Processing, Drift, Attraction, DecisionModel, CognitiveCouncil,
+│   │                  #   GeneticModel, EpigeneticModel, GeneticAttribution
+│   ├── social/        # RelationshipManager, FertilityManager, LoreEngine,
+│   │                  #   SocialHierarchyManager, MentorshipManager, CommunityManager
 │   ├── metrics/       # MetricsCollector, export for visualization
 │   ├── experiment/    # ExperimentRunner, Presets, Archetypes, OutsiderInterface
-│   ├── extensions/    # SimulationExtension ABC, Registry, Geography, Migration,
-│   │                  #   Resources, Technology, Culture, Conflict
-│   └── llm/           # Agent interviews, narrative generation (build last)
-├── tests/             # Unit + integration + property-based (hypothesis) tests
-├── frontend/          # React web dashboard (10 visualization views)
-├── notebooks/         # Jupyter exploration notebooks
-├── examples/          # run_baseline.py, run_ab_test.py, run_archetype_society.py, etc.
+│   ├── extensions/    # SimulationExtension ABC, Registry, 10 extension modules
+│   │                  #   (geography, migration, resources, technology, culture,
+│   │                  #    conflict, social_dynamics, diplomacy, economics, environment)
+│   ├── llm/           # ClaudeClient, OllamaClient, Interviewer, Narrator, Prompts
+│   └── api/           # FastAPI app, SessionManager, SessionStore (SQLite persistence),
+│                      #   Serializers, 13 routers (simulation, agents, metrics,
+│                      #   experiments, settlements, network, advanced, llm, social,
+│                      #   communities, economics, environment, genetics)
+├── tests/             # 598 tests (pytest) + conftest.py for DB isolation
+├── frontend/          # React + TypeScript + Tailwind v4 + Recharts + D3
+│   └── src/components/views/  # 18 dashboard views across 6 sections
+├── examples/          # run_baseline.py, run_phase2_demo.py
 └── docs/              # Architecture v3.0, handoff v2.0, conversation transcripts
 ```
 
 ## Build & Run Commands
 
 ```bash
-# Install dependencies
-pip install -e ".[dev]"
-# or: poetry install
+# Install dependencies (with API + dev extras)
+pip install -e ".[api,dev]"
 
-# Run all tests
+# Run all tests (598 tests)
 pytest tests/
 
 # Run a single test file
@@ -183,14 +207,14 @@ pytest --cov=seldon tests/
 # Run a basic simulation
 python examples/run_baseline.py
 
-# Run an A/B comparison
-python examples/run_ab_test.py
+# Start the backend API
+uvicorn seldon.api.app:app --host 0.0.0.0 --port 8006 --reload
 
-# Run an archetype society experiment
-python examples/run_archetype_society.py
-
-# Start the frontend dashboard (when implemented)
+# Start the frontend dashboard (in a separate terminal)
 cd frontend && npm install && npm run dev
+
+# Or use Docker for the full stack
+docker compose up --build
 ```
 
 ## Dependencies
@@ -198,23 +222,36 @@ cd frontend && npm install && npm run dev
 Core: `numpy`, `scipy`, `dataclasses-json`
 Testing: `pytest`, `pytest-cov`, `hypothesis`
 Visualization: `matplotlib`, `pandas`, `plotly`
-API: `fastapi`, `uvicorn`, `pydantic`
-Frontend: React, Tailwind CSS, shadcn/ui, Recharts, D3.js
+API: `fastapi`, `uvicorn`, `pydantic`, `python-dotenv`, `anthropic`
+Persistence: `sqlite3` (stdlib — no extra install)
+Frontend: React, TypeScript, Tailwind CSS v4, Recharts, D3.js, Zustand, Lucide icons
 Notebooks: `jupyter`
 
-## Implementation Priority
+## Implementation Status
 
-**Phase 1 (P0 — Core Engine):** TraitSystem → ExperimentConfig → Agent → ProcessingClassifier → InheritanceEngine → TraitDriftEngine → AttractionModel → DecisionModel → SimulationEngine
+All phases complete. Current state of the system:
 
-**Phase 2 (P1 — Intelligence & Social):** CognitiveCouncil → LoreEngine → RelationshipManager → FertilityManager → MetricsCollector → ExperimentRunner → Presets → Archetypes → OutsiderInterface + RippleTracker
+**Phase 1 (Core Engine):** TraitSystem, ExperimentConfig, Agent, ProcessingClassifier, InheritanceEngine, TraitDriftEngine, AttractionModel, DecisionModel, SimulationEngine — **COMPLETE**
 
-**Phase 3 (P1 — Visualization):** Dashboard → Population Overview → Suffering vs. Contribution → Agent Explorer → Experiment Comparison → Family & Lineage
+**Phase 2 (Intelligence & Social):** CognitiveCouncil, LoreEngine, RelationshipManager, FertilityManager, MetricsCollector, ExperimentRunner, Presets, Archetypes, OutsiderInterface + RippleTracker — **COMPLETE**
 
-**Phase 4 (P2 — Extensions):** Extension ABC + Registry → Geography → Migration (settlement composition) → Resources → Technology → Culture/Memes → Conflict
+**Phase 3 (Visualization):** FastAPI backend (13 routers), React dashboard (18 views), Population, Suffering, Agent Explorer, Experiments, Family & Lineage — **COMPLETE**
 
-**Phase 5 (P2 — Advanced Viz):** Settlement Diagnostics → Network View → Lore Evolution → Anomaly Detection → Parameter Sensitivity
+**Phase 4 (Extensions):** Extension ABC + Registry, Geography, Migration, Resources, Technology, Culture/Memes, Conflict — **COMPLETE**
 
-**Phase 6 (P3 — LLM):** Agent interviews, narrative generation, decision narration
+**Phase 5 (Advanced Viz):** Settlement Diagnostics, Network View, Lore Evolution, Anomaly Detection, Parameter Sensitivity — **COMPLETE**
+
+**Phase 6 (LLM):** Dual-provider client (Anthropic + Ollama), agent interviews, narrative generation, decision narration — **COMPLETE**
+
+**Phase 7 (Social Dynamics):** SocialHierarchyManager, MentorshipManager, SocialDynamicsExtension, social API router — **COMPLETE**
+
+**Phase 8 (Genetics):** GeneticModel, EpigeneticModel, GeneticAttribution, inheritance integration, engine Phase 1.5 — **COMPLETE**
+
+**Phases 9-11 (Community, Economics, Environment):** CommunityManager, DiplomacyExtension, EconomicsExtension, EnvironmentExtension — **COMPLETE**
+
+**Phase 12 (Frontend Controls):** Dashboard controls for all 10 extensions, outsider builder, 6 new views, genetics API router — **COMPLETE**
+
+**Persistence:** SQLite session persistence with auto-save, lazy loading, compressed state blobs — **COMPLETE**
 
 ## Source Documentation
 
@@ -228,7 +265,7 @@ All project context lives in `docs/`:
 - `Claude Conversation about modeling the society.docx` — Simulation results; 10-gen data, migration modeling, attraction calibration, fertility constraints, population dynamics
 - `Characteristics - experiential.docx` — Echo Nexus AI mind; experiential encoding, assertoric signals, phenomenal memory, personality evolution (relevant for future LLM integration)
 
-## Key Experiments the System Should Support
+## Key Experiments the System Supports
 
 1. **Birth order hypothesis**: Does 1st=worst, 2nd=weirdest, 3rd=best produce emergent structures? What about inverted rules?
 2. **Optimal processing mix**: What R1-R5 proportion maximizes societal contribution?
@@ -238,3 +275,21 @@ All project context lives in `docs/`:
 6. **Lore degradation**: How do distorted memories affect collective behavior?
 7. **Archetype societies**: What emerges from a society of Einsteins? Of Curies + Fred Rogers?
 8. **Resource scarcity pressure**: How does scarcity change processing region distributions?
+9. **Genetic drift vs selection**: Do allele frequencies shift toward optimal or random distributions?
+10. **Epigenetic adaptation**: Do trauma markers persist and help future generations cope?
+11. **Social hierarchy emergence**: What personality mixes produce stable vs. chaotic hierarchies?
+12. **Economic inequality**: How does trade network topology affect wealth distribution?
+
+## Persistence & Data Model
+
+Sessions are persisted to SQLite (`data/seldon.db` by default, configurable via `SELDON_DB_PATH`).
+
+Key details:
+- `SessionManager(db_path=)`: `None` = in-memory only, string = SQLite path
+- Auto-save after every mutation (create, step, run_full, reset, delete)
+- Lazy load: `_session_index` holds metadata; full state deserialized on `get_session()`
+- State blob: zlib-compressed JSON with all_agents, living_agent_ids, metrics_history, next_agent_id, previous_regions
+- Extension state NOT persisted — rebuilt via `_build_extensions()` + `on_simulation_start()` on load
+- RNG reseeded on load: `seed + current_generation`
+- `conftest.py` sets `SELDON_DB_PATH` to tmpdir for test isolation
+- Docker: `seldon-data` named volume at `/app/data`
