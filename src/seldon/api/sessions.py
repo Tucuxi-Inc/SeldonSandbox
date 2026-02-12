@@ -355,7 +355,7 @@ class SessionManager:
             GeographyExtension, MigrationExtension, ResourcesExtension,
             TechnologyExtension, CultureExtension, ConflictExtension,
             SocialDynamicsExtension, DiplomacyExtension, EconomicsExtension,
-            EnvironmentExtension, EpistemologyExtension,
+            EnvironmentExtension, EpistemologyExtension, InnerLifeExtension,
         )
 
         registry = ExtensionRegistry()
@@ -376,6 +376,7 @@ class SessionManager:
         registry.register(EconomicsExtension())
         registry.register(EnvironmentExtension())
         registry.register(EpistemologyExtension())
+        registry.register(InnerLifeExtension())
 
         # Enable those requested (in order — dependency checked)
         for name in config.extensions_enabled:

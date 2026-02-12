@@ -328,6 +328,35 @@ class ExperimentConfig:
         "base_conviction_decay": 0.005,
     })
 
+    # === Inner Life / Experiential Mind (Phase F) ===
+    inner_life_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "modulation_strength": 0.15,
+        "max_experiences_per_agent": 50,
+        "recall_similarity_threshold": 0.6,
+        "recall_top_k": 5,
+        "experiential_weight": 0.4,
+        "positive_recall_boost": 0.15,
+        "negative_recall_penalty": 0.15,
+        "initial_assertoric_strength": 0.9,
+        "assertoric_decay_rate": 0.05,
+        "assertoric_min_floor": 0.05,
+        "arousal_decay_protection": 0.3,
+        "pq_valence_weight": 0.3,
+        "pq_social_weight": 0.2,
+        "pq_agency_weight": 0.2,
+        "pq_meaning_weight": 0.2,
+        "pq_needs_weight": 0.1,
+        "pq_lookback_generations": 5,
+        "experiential_drift_rate": 0.005,
+        "drift_lookback_generations": 3,
+        "mood_decay": 0.7,
+        "pq_mortality_scale": 0.03,
+        "mood_attraction_bonus": 0.1,
+        "inheritance_top_k": 3,
+        "inheritance_strength_decay": 0.5,
+    })
+
     # === Environment (Phase 11) ===
     environment_config: dict[str, Any] = field(default_factory=lambda: {
         "enabled": True,
