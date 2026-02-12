@@ -12,6 +12,7 @@ from seldon.extensions.social_dynamics import SocialDynamicsExtension
 from seldon.extensions.diplomacy import DiplomacyExtension
 from seldon.extensions.economics import EconomicsExtension
 from seldon.extensions.environment import EnvironmentExtension
+from seldon.extensions.epistemology import EpistemologyExtension
 
 __all__ = [
     "SimulationExtension",
@@ -27,4 +28,5 @@ __all__ = [
     "DiplomacyExtension",
     "EconomicsExtension",
     "EnvironmentExtension",
+    "EpistemologyExtension",
 ]

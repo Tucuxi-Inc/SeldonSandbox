@@ -301,6 +301,33 @@ class ExperimentConfig:
         },
     })
 
+    # === Beliefs / Epistemology (Phase E) ===
+    belief_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "memory_to_belief_threshold": 0.5,
+        "empirical_min_fidelity": 0.7,
+        "traditional_min_fidelity": 0.3,
+        "sacred_conviction_threshold": 0.8,
+        "sacred_min_age_generations": 3,
+        "propagation_rate": 0.15,
+        "bond_strength_weight": 0.5,
+        "conviction_transmission_decay": 0.1,
+        "parent_transmission_rate": 0.6,
+        "empirical_correction_rate": 0.1,
+        "sacred_resistance": 0.95,
+        "traditional_resistance": 0.5,
+        "mythical_drift_rate": 0.05,
+        "conflict_same_domain_threshold": 0.3,
+        "evidence_weight": 0.6,
+        "social_pressure_weight": 0.4,
+        "max_beliefs_per_agent": 12,
+        "contribution_modifier_scale": 0.1,
+        "decision_effect_scale": 0.15,
+        "reinforcement_conviction_boost": 0.05,
+        "challenge_conviction_decay": 0.03,
+        "base_conviction_decay": 0.005,
+    })
+
     # === Environment (Phase 11) ===
     environment_config: dict[str, Any] = field(default_factory=lambda: {
         "enabled": True,

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from seldon.api.sessions import SessionManager
-from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced, llm, social, communities, economics, environment, genetics
+from seldon.api.routers import simulation, metrics, agents, experiments, settlements, network, advanced, llm, social, communities, economics, environment, genetics, beliefs
 
 # Load .env — try project root first, then CWD (handles Docker volume mount)
 _project_root = Path(__file__).resolve().parents[3]  # src/seldon/api/app.py → project root
@@ -51,6 +51,7 @@ def create_app() -> FastAPI:
     application.include_router(economics.router, prefix="/api/economics", tags=["economics"])
     application.include_router(environment.router, prefix="/api/environment", tags=["environment"])
     application.include_router(genetics.router, prefix="/api/genetics", tags=["genetics"])
+    application.include_router(beliefs.router, prefix="/api/beliefs", tags=["beliefs"])
 
     @application.get("/api/health")
     def health_check():
