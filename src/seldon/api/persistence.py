@@ -116,6 +116,14 @@ def serialize_agent(agent: Agent) -> dict[str, Any]:
         "gender": agent.gender,
         # Fertility
         "last_birth_generation": int(agent.last_birth_generation) if agent.last_birth_generation is not None else None,
+        # Tick-based / Needs (Phase A)
+        "_age_ticks": int(agent._age_ticks),
+        "life_phase": agent.life_phase,
+        "location": list(agent.location) if agent.location else None,
+        "needs": dict(agent.needs),
+        "health": float(agent.health),
+        "needs_history": agent.needs_history,
+        "health_history": [float(h) for h in agent.health_history],
     }
 
 
@@ -170,6 +178,18 @@ def deserialize_agent(d: dict[str, Any]) -> Agent:
     agent.injection_generation = d.get("injection_generation")
     agent.gender = d.get("gender")
     agent.last_birth_generation = d.get("last_birth_generation")
+    # Tick-based / Needs (Phase A)
+    agent._age_ticks = d.get("_age_ticks", 0)
+    agent.life_phase = d.get("life_phase")
+    loc = d.get("location")
+    agent.location = tuple(loc) if loc else None
+    agent.needs = d.get("needs", {
+        "hunger": 1.0, "thirst": 1.0, "shelter": 1.0,
+        "safety": 1.0, "warmth": 1.0, "rest": 1.0,
+    })
+    agent.health = d.get("health", 1.0)
+    agent.needs_history = d.get("needs_history", [])
+    agent.health_history = d.get("health_history", [])
     return agent
 
 
@@ -291,6 +311,7 @@ def build_state_blob(
     metrics_history: list[GenerationMetrics],
     next_agent_id: int,
     previous_regions: dict[str, str],
+    hex_grid_data: dict[str, Any] | None = None,
 ) -> bytes:
     """Build and compress the full session state blob."""
     state = {
@@ -302,6 +323,8 @@ def build_state_blob(
         "next_agent_id": next_agent_id,
         "previous_regions": previous_regions,
     }
+    if hex_grid_data is not None:
+        state["hex_grid"] = hex_grid_data
     return compress_state(state)
 
 
@@ -314,9 +337,10 @@ def restore_state(blob: bytes) -> dict[str, Any]:
         metrics_history: list[GenerationMetrics]
         next_agent_id: int
         previous_regions: dict[str, str]
+        hex_grid: dict | None  (if present)
     """
     raw = decompress_state(blob)
-    return {
+    result = {
         "all_agents": {
             aid: deserialize_agent(ad) for aid, ad in raw["all_agents"].items()
         },
@@ -325,6 +349,9 @@ def restore_state(blob: bytes) -> dict[str, Any]:
         "next_agent_id": raw["next_agent_id"],
         "previous_regions": raw["previous_regions"],
     }
+    if "hex_grid" in raw:
+        result["hex_grid"] = raw["hex_grid"]
+    return result
 
 
 # ---------------------------------------------------------------------------

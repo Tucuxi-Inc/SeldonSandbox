@@ -35,7 +35,7 @@ class SimulationSession:
     id: str
     name: str
     config: ExperimentConfig
-    engine: SimulationEngine
+    engine: Any  # SimulationEngine or TickEngine
     collector: MetricsCollector
     status: str = "created"  # created | running | completed
     current_generation: int = 0
@@ -86,12 +86,20 @@ class SessionManager:
             return
         try:
             from seldon.api.persistence import build_state_blob
+
+            # Include hex grid data if available
+            hex_grid_data = None
+            hex_grid = getattr(session.engine, "hex_grid", None)
+            if hex_grid is not None:
+                hex_grid_data = hex_grid.to_dict()
+
             blob = build_state_blob(
                 all_agents=session.all_agents,
                 living_agent_ids=[a.id for a in session.engine.population],
                 metrics_history=session.collector.metrics_history,
                 next_agent_id=session.engine._next_agent_id,
                 previous_regions=session.collector._previous_regions,
+                hex_grid_data=hex_grid_data,
             )
             self._store.save_session(
                 session_id=session.id,
@@ -125,7 +133,11 @@ class SessionManager:
 
             # Rebuild engine + extensions
             registry = self._build_extensions(config)
-            engine = SimulationEngine(config, extensions=registry)
+            if config.tick_config.get("enabled", False):
+                from seldon.core.tick_engine import TickEngine
+                engine = TickEngine(config, extensions=registry)
+            else:
+                engine = SimulationEngine(config, extensions=registry)
 
             # Restore agent data
             all_agents: dict[str, Agent] = state["all_agents"]
@@ -135,6 +147,13 @@ class SessionManager:
                 if aid in all_agents
             ]
             engine._next_agent_id = state["next_agent_id"]
+
+            # Restore hex grid if available
+            if "hex_grid" in state and state["hex_grid"] is not None:
+                hex_grid = getattr(engine, "_hex_grid", None)
+                if hex_grid is None and hasattr(engine, "_hex_enabled"):
+                    from seldon.core.hex_grid import HexGrid
+                    engine._hex_grid = HexGrid.from_dict(state["hex_grid"])
 
             # Reseed RNG deterministically: seed + current_generation
             gen = record["current_generation"]
@@ -187,7 +206,12 @@ class SessionManager:
 
         session_id = uuid.uuid4().hex[:8]
         registry = self._build_extensions(config)
-        engine = SimulationEngine(config, extensions=registry)
+
+        if config.tick_config.get("enabled", False):
+            from seldon.core.tick_engine import TickEngine
+            engine = TickEngine(config, extensions=registry)
+        else:
+            engine = SimulationEngine(config, extensions=registry)
         engine.population = engine._create_initial_population()
 
         # Fire on_simulation_start for extensions (run() does this but
@@ -285,7 +309,11 @@ class SessionManager:
 
         # Rebuild engine with same config + extensions
         registry = self._build_extensions(session.config)
-        engine = SimulationEngine(session.config, extensions=registry)
+        if session.config.tick_config.get("enabled", False):
+            from seldon.core.tick_engine import TickEngine
+            engine = TickEngine(session.config, extensions=registry)
+        else:
+            engine = SimulationEngine(session.config, extensions=registry)
         engine.population = engine._create_initial_population()
 
         for ext in engine.extensions.get_enabled():

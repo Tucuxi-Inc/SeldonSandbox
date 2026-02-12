@@ -70,7 +70,11 @@ class ResourcesExtension(SimulationExtension):
         self, generation: int, population: list[Agent],
         config: ExperimentConfig,
     ) -> None:
-        """Regenerate resources, consume per agent, recalculate scarcity."""
+        """Regenerate resources, consume per agent, recalculate scarcity.
+
+        When economics settlements exist, aggregate their resource pools
+        into the global pools to keep scarcity_index accurate.
+        """
         res = self._get_config(config)
         self._population_size = len(population)
         regen_rate = res["base_regeneration_rate"]
@@ -85,7 +89,26 @@ class ResourcesExtension(SimulationExtension):
                 0.0, self.resource_pools[rtype] - total_consumed,
             )
 
+        # Phase C: aggregate settlement resource pools into global pools
+        self._aggregate_settlement_pools(config)
+
         self._update_scarcity()
+
+    def _aggregate_settlement_pools(
+        self, config: ExperimentConfig,
+    ) -> None:
+        """If economics extension has settlements, fold their pools in."""
+        from seldon.extensions.economics import EconomicsExtension
+        # Find economics extension via config — we check extensions dict
+        # for the economics extension reference stored externally
+        # Since we don't have direct registry access, check if any settlement
+        # data was stored. We access it via the _economics_ref if set.
+        econ_ref = getattr(self, '_economics_ref', None)
+        if econ_ref is not None and hasattr(econ_ref, 'settlements'):
+            for settlement in econ_ref.settlements.values():
+                for rtype, amount in settlement.resource_pools.items():
+                    if rtype in self.resource_pools:
+                        self.resource_pools[rtype] += amount * 0.1
 
     def modify_mortality(
         self, agent: Agent, base_rate: float,

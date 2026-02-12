@@ -1,5 +1,5 @@
 """
-Economics API router — trade routes, markets, wealth distribution.
+Economics API router — trade routes, markets, wealth distribution, settlements.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def economics_overview(request: Request, session_id: str):
 
 @router.get("/{session_id}/trade-routes")
 def get_trade_routes(request: Request, session_id: str):
-    """All active trade routes with volumes."""
+    """All active trade routes with volumes and goods flow."""
     session = _get_session(request, session_id)
     ext = _get_economics_extension(session)
     if ext is None:
@@ -77,3 +77,57 @@ def get_occupations(request: Request, session_id: str):
             occ = a.occupation or "unassigned"
             occ_counts[occ] = occ_counts.get(occ, 0) + 1
     return {"occupations": occ_counts, "total": sum(occ_counts.values())}
+
+
+# ------------------------------------------------------------------
+# Phase C: Settlement economy endpoints
+# ------------------------------------------------------------------
+
+@router.get("/{session_id}/settlements")
+def get_settlements(request: Request, session_id: str):
+    """Per-settlement economy data: resources, GDP, governance, infrastructure."""
+    session = _get_session(request, session_id)
+    ext = _get_economics_extension(session)
+    if ext is None:
+        return {"enabled": False, "settlements": []}
+    return {"enabled": True, "settlements": ext.get_settlements_data()}
+
+
+@router.get("/{session_id}/settlements/{settlement_id}")
+def get_settlement_detail(
+    request: Request, session_id: str, settlement_id: str,
+):
+    """Detailed settlement data including agent list and tile coords."""
+    session = _get_session(request, session_id)
+    ext = _get_economics_extension(session)
+    if ext is None:
+        return {"enabled": False, "message": "Economics extension not enabled"}
+    detail = ext.get_settlement_detail(settlement_id)
+    if detail is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Settlement '{settlement_id}' not found",
+        )
+    return {"enabled": True, **detail}
+
+
+@router.get("/{session_id}/skills")
+def get_skills(request: Request, session_id: str):
+    """Population skill distribution by occupation."""
+    session = _get_session(request, session_id)
+    ext = _get_economics_extension(session)
+    if ext is None:
+        return {"enabled": False, "skills": {}}
+    skills = ext.get_skill_distribution(session.engine.population)
+    return {"enabled": True, "skills": skills}
+
+
+@router.get("/{session_id}/production")
+def get_production(request: Request, session_id: str):
+    """Total production by resource type and settlement."""
+    session = _get_session(request, session_id)
+    ext = _get_economics_extension(session)
+    if ext is None:
+        return {"enabled": False, "production": {}}
+    production = ext.get_production_summary()
+    return {"enabled": True, **production}

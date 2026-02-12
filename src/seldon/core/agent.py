@@ -103,12 +103,30 @@ class Agent:
     # === Fertility tracking ===
     last_birth_generation: int | None = None
 
+    # === Tick-based time (Phase A) ===
+    _age_ticks: int = 0                               # Internal age in ticks (months)
+    life_phase: str | None = None                     # Current life phase value
+    location: tuple[int, int] | None = None           # Hex coordinates (q, r)
+
+    # === Needs (Phase A) ===
+    needs: dict[str, float] = field(default_factory=lambda: {
+        "hunger": 1.0, "thirst": 1.0, "shelter": 1.0,
+        "safety": 1.0, "warmth": 1.0, "rest": 1.0,
+    })
+    health: float = 1.0                               # 0-1, damaged by chronic unmet needs
+
+    # === Needs history (yearly snapshots) ===
+    needs_history: list[dict[str, float]] = field(default_factory=list)
+    health_history: list[float] = field(default_factory=list)
+
     def record_generation(self, contribution: float) -> None:
         """Append current state to all history lists."""
         self.trait_history.append(self.traits.copy())
         self.region_history.append(self.processing_region)
         self.contribution_history.append(contribution)
         self.suffering_history.append(self.suffering)
+        self.needs_history.append(dict(self.needs))
+        self.health_history.append(self.health)
 
     def is_eligible_for_pairing(self, min_age: int) -> bool:
         """Check if agent can seek a partner."""

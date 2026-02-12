@@ -212,7 +212,7 @@ class ExperimentConfig:
         "cultural_similarity_weight": 0.25,
     })
 
-    # === Economics (Phase 10) ===
+    # === Economics (Phase 10 + Phase C) ===
     economics_config: dict[str, Any] = field(default_factory=lambda: {
         "enabled": True,
         "base_production_rate": 1.0,
@@ -223,6 +223,53 @@ class ExperimentConfig:
         "wealth_inheritance_rate": 0.7,
         "occupation_change_rate": 0.1,
         "specialization_bonus": 0.3,
+        # Phase C: per-tick economy
+        "consumption_per_tick": {"food": 0.03, "goods": 0.01, "knowledge": 0.005},
+        "skill_gain_per_tick": 0.01,
+        "skill_decay_rate": 0.002,
+        "skill_max": 1.0,
+        "min_settlement_size": 3,
+        "trade_frequency_ticks": 3,
+        "trade_volume_base": 1.0,
+        "trader_facilitation_income": 0.05,
+        "governance_enabled": True,
+        "base_taxation_rate": 0.10,
+        "infrastructure_growth_rate": 0.01,
+        "infrastructure_capacity_bonus": 2,
+        "poverty_relief_priority": 0.5,
+        "terrain_production_modifiers": {
+            "farmer": {
+                "valley": 1.3, "river_valley": 1.4, "coastal": 1.0,
+                "grassland": 1.1, "forest": 0.7, "foothills": 0.6,
+                "mountain": 0.3, "desert": 0.2, "tundra": 0.2,
+            },
+            "artisan": {
+                "valley": 1.0, "river_valley": 1.0, "coastal": 1.2,
+                "grassland": 0.8, "forest": 1.1, "foothills": 1.2,
+                "mountain": 1.3, "desert": 0.5, "tundra": 0.4,
+            },
+            "scholar": {
+                "valley": 1.1, "river_valley": 1.1, "coastal": 1.0,
+                "grassland": 0.9, "forest": 1.2, "foothills": 0.9,
+                "mountain": 0.8, "desert": 0.6, "tundra": 0.5,
+            },
+            "soldier": {
+                "valley": 1.0, "river_valley": 0.9, "coastal": 1.1,
+                "grassland": 1.2, "forest": 1.1, "foothills": 1.3,
+                "mountain": 1.0, "desert": 0.8, "tundra": 0.7,
+            },
+            "trader": {
+                "valley": 1.1, "river_valley": 1.2, "coastal": 1.4,
+                "grassland": 1.0, "forest": 0.7, "foothills": 0.8,
+                "mountain": 0.5, "desert": 0.6, "tundra": 0.3,
+            },
+        },
+        "season_production_modifiers": {
+            "spring": {"food": 1.1, "goods": 1.0, "knowledge": 1.0},
+            "summer": {"food": 1.3, "goods": 1.0, "knowledge": 0.9},
+            "autumn": {"food": 1.2, "goods": 1.1, "knowledge": 1.0},
+            "winter": {"food": 0.6, "goods": 1.1, "knowledge": 1.2},
+        },
     })
 
     # === Environment (Phase 11) ===
@@ -240,6 +287,68 @@ class ExperimentConfig:
         "disease_transmission_rate": 0.15,
         "disease_base_mortality": 0.1,
         "quarantine_effectiveness": 0.5,
+    })
+
+    # === Tick-based engine (Phase A) ===
+    tick_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": False,
+        "ticks_per_year": 12,
+        "life_phase_boundaries": {
+            "infant": [0, 2],
+            "child": [3, 12],
+            "adolescent": [13, 17],
+            "young_adult": [18, 30],
+            "mature": [31, 55],
+            "elder": [56, 999],
+        },
+        "season_effects_enabled": True,
+        "season_modifiers": {
+            "spring": {"fertility_mult": 1.2, "mortality_mult": 0.9,
+                       "contribution_mult": 1.0, "food_mult": 1.1, "mood_offset": 0.05},
+            "summer": {"fertility_mult": 1.0, "mortality_mult": 0.95,
+                       "contribution_mult": 1.1, "food_mult": 1.3, "mood_offset": 0.03},
+            "autumn": {"fertility_mult": 0.8, "mortality_mult": 1.0,
+                       "contribution_mult": 1.05, "food_mult": 1.2, "mood_offset": -0.02},
+            "winter": {"fertility_mult": 0.6, "mortality_mult": 1.3,
+                       "contribution_mult": 0.8, "food_mult": 0.6, "mood_offset": -0.05},
+        },
+    })
+
+    # === Hex grid geography (Phase A) ===
+    hex_grid_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": False,
+        "width": 20,
+        "height": 10,
+        "map_generator": "california_slice",
+        "starting_hex": [5, 5],
+        "movement_cost_base": 1.0,
+        "vision_range": 2,
+        "stay_bias": 0.3,
+    })
+
+    # === Needs system (Phase A) ===
+    needs_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "base_decay_rates": {
+            "hunger": 0.08,
+            "thirst": 0.12,
+            "shelter": 0.04,
+            "safety": 0.05,
+            "warmth": 0.06,
+            "rest": 0.10,
+        },
+        "warning_threshold": 0.4,
+        "critical_threshold": 0.2,
+        "lethal_threshold": 0.05,
+        "warning_suffering_per_tick": 0.01,
+        "critical_suffering_per_tick": 0.03,
+        "critical_health_damage_per_tick": 0.03,
+        "lethal_suffering_per_tick": 0.06,
+        "lethal_health_damage_per_tick": 0.08,
+        "health_recovery_rate": 0.02,
+        "health_mortality_threshold": 0.5,
+        "needs_mortality_multiplier": 0.3,
+        "burnout_decay_amplifier": 0.2,
     })
 
     # === Extensions ===

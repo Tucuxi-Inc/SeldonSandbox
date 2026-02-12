@@ -100,6 +100,13 @@ def serialize_agent_detail(agent: Agent, trait_system: TraitSystem) -> dict[str,
         "genome": {k: list(v) for k, v in agent.genome.items()} if agent.genome else {},
         "epigenetic_state": dict(agent.epigenetic_state) if agent.epigenetic_state else {},
         "genetic_lineage": _sanitize_lineage(agent.genetic_lineage) if agent.genetic_lineage else {},
+        # Tick-based / Needs (Phase A)
+        "life_phase": agent.life_phase,
+        "location": list(agent.location) if agent.location else None,
+        "needs": dict(agent.needs),
+        "health": round(float(agent.health), 4),
+        "needs_history": agent.needs_history,
+        "health_history": [round(float(h), 4) for h in agent.health_history],
     }
 
 
