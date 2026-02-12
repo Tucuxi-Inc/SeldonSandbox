@@ -20,12 +20,17 @@ def _get_session(request: Request, session_id: str):
         raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
 
 
-def _is_social_dynamics_enabled(session) -> bool:
-    """Check if the social_dynamics extension is active."""
+def _get_social_dynamics_ext(session):
+    """Get the social_dynamics extension or None."""
     for ext in session.engine.extensions.get_enabled():
         if ext.name == "social_dynamics":
-            return True
-    return False
+            return ext
+    return None
+
+
+def _is_social_dynamics_enabled(session) -> bool:
+    """Check if the social_dynamics extension is active."""
+    return _get_social_dynamics_ext(session) is not None
 
 
 @router.get("/{session_id}/hierarchy")
@@ -143,4 +148,62 @@ def get_influence_map(request: Request, session_id: str):
             }
             for a in sorted_by_influence[:30]
         ],
+    }
+
+
+@router.get("/{session_id}/marriages")
+def get_marriages(request: Request, session_id: str):
+    """Get marriage statistics and political marriages."""
+    session = _get_session(request, session_id)
+    ext = _get_social_dynamics_ext(session)
+
+    if ext is None or ext._marriage is None:
+        return {"enabled": False}
+
+    population = session.engine.population
+    generation = session.current_generation
+
+    stats = ext._marriage.get_marriage_stats(population, generation)
+    political = ext._marriage.get_political_marriages(population)
+
+    return {
+        "enabled": True,
+        "married_count": stats["married_count"],
+        "avg_duration": round(stats["avg_duration"], 2),
+        "total_divorces": stats["total_divorces"],
+        "political_marriages": political,
+    }
+
+
+@router.get("/{session_id}/clans")
+def get_clans(request: Request, session_id: str):
+    """Get clan data: membership, honor, and rivalries."""
+    session = _get_session(request, session_id)
+    ext = _get_social_dynamics_ext(session)
+
+    if ext is None or ext._clans is None:
+        return {"enabled": False}
+
+    clans = ext._clans.get_clan_data()
+
+    return {
+        "enabled": True,
+        "clans": clans,
+    }
+
+
+@router.get("/{session_id}/institutions")
+def get_institutions(request: Request, session_id: str):
+    """Get institution data: councils, guilds, leaders, and prestige."""
+    session = _get_session(request, session_id)
+    ext = _get_social_dynamics_ext(session)
+
+    if ext is None or ext._institutions is None:
+        return {"enabled": False}
+
+    institutions = ext._institutions.get_institution_data()
+
+    return {
+        "enabled": True,
+        "institutions": institutions,
     }

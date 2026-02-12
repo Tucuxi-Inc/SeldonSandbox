@@ -87,7 +87,14 @@ class SocialHierarchyManager:
         social_score = min(bond_count / 10.0, 1.0)
         components.append(social_score * hc["status_social_weight"])
 
-        return float(np.clip(sum(components), 0.0, 1.0))
+        status = float(np.clip(sum(components), 0.0, 1.0))
+
+        # Phase D bonuses (additive, from extension_data — 0.0 when Phase D not active)
+        clan_bonus = agent.extension_data.get("clan_honor_bonus", 0.0)
+        institution_bonus = agent.extension_data.get("institution_prestige_bonus", 0.0)
+        status = min(status + clan_bonus + institution_bonus, 1.0)
+
+        return status
 
     def compute_influence(
         self, agent: Agent, population: list[Agent],

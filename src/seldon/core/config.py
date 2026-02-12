@@ -191,6 +191,35 @@ class ExperimentConfig:
         "max_active_markers": 5,
     })
 
+    # === Marriage, Clans, Institutions (Phase D) ===
+    marriage_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "formalization_delay_generations": 1,
+        "divorce_base_rate": 0.02,
+        "property_sharing_rate": 0.5,
+        "political_marriage_enabled": True,
+        "political_marriage_alliance_bonus": 0.1,
+    })
+    clan_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "min_living_members": 3,
+        "founder_min_status": 0.6,
+        "honor_status_weight": 0.1,
+        "rival_threshold": 0.3,
+        "max_clans": 10,
+        "max_depth": 3,
+    })
+    institutions_config: dict[str, Any] = field(default_factory=lambda: {
+        "enabled": True,
+        "council_min_elders": 3,
+        "council_elder_min_age": 40,
+        "council_min_community_size": 10,
+        "guild_min_members": 5,
+        "guild_min_skill": 0.3,
+        "institution_prestige_weight": 0.1,
+        "election_frequency_generations": 5,
+    })
+
     # === Community (Phase 9) ===
     community_config: dict[str, Any] = field(default_factory=lambda: {
         "cohesion_trait_weight": 0.4,
