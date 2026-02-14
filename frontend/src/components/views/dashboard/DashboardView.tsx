@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useSimulationStore } from '../../../stores/simulation';
 import * as api from '../../../api/client';
 import type { PresetInfo, ArchetypeInfo } from '../../../types';
+import { WorldPreview } from './WorldPreview';
 
 export function DashboardView() {
   const { activeSessionId, sessions, refreshAll, setActiveSession, updateSession } = useSimulationStore();
@@ -542,6 +543,9 @@ export function DashboardView() {
           </div>
         </div>
       </div>
+
+      {/* World Preview — shown when active session has tick/hex enabled */}
+      <WorldPreview />
     </div>
   );
 }

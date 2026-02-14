@@ -480,7 +480,12 @@ class TickEngine:
         return pop
 
     def _place_initial_agents(self, pop: list[Agent]) -> None:
-        """Distribute agents across habitable tiles near starting_hex."""
+        """Place all agents together as a village near starting_hex.
+
+        Agents begin clustered on the starting hex and its immediate
+        neighbors to simulate a founding village.  They will spread
+        outward organically through tick-level movement decisions.
+        """
         grid = self._hex_grid
         start = self._starting_hex
 
@@ -493,21 +498,18 @@ class TickEngine:
         if not habitable:
             return
 
-        # Distribute agents across tiles, respecting capacity
-        tile_idx = 0
-        for agent in pop:
-            # Find a tile with remaining capacity
-            attempts = 0
-            while attempts < len(habitable):
-                tile = habitable[tile_idx % len(habitable)]
-                if tile.capacity <= 0 or len(tile.current_agents) < tile.capacity:
-                    break
-                tile_idx += 1
-                attempts += 1
-            else:
-                # All tiles at capacity — place on least-full habitable tile
-                tile = min(habitable, key=lambda t: len(t.current_agents))
+        # Use the starting hex (or closest habitable) as the village center.
+        # Place everyone on the center tile and its immediate neighbors,
+        # temporarily exceeding capacity to keep the village tight.
+        village_tiles = [
+            t for t in habitable
+            if HexGrid.hex_distance(t.coords, habitable[0].coords) <= 1
+        ]
+        if not village_tiles:
+            village_tiles = [habitable[0]]
 
+        for i, agent in enumerate(pop):
+            tile = village_tiles[i % len(village_tiles)]
             grid.place_agent(tile.q, tile.r, agent.id)
             agent.location = (tile.q, tile.r)
             agent.extension_data["terrain_type"] = tile.terrain_type.value
@@ -1176,6 +1178,14 @@ class TickEngine:
                     events.lore_transmitted += lore_count
 
             self._repro_adapter.complete_birth(mother)
+
+            # Maternal death: _create_child may set mother.is_alive=False
+            # via SimulationEngine's maternal mortality check.  Remove
+            # the dead mother from the hex grid so she doesn't linger.
+            if not mother.is_alive and self._hex_grid is not None and mother.location is not None:
+                self._hex_grid.remove_agent(
+                    mother.location[0], mother.location[1], mother.id,
+                )
 
     # ------------------------------------------------------------------
     # Needs processing
