@@ -21,6 +21,7 @@ import {
   BookHeart,
   Brain,
   Map,
+  Globe,
   Scale,
   BookUser,
   Newspaper,
@@ -37,6 +38,7 @@ const coreNavItems = [
 ];
 
 const advancedNavItems = [
+  { to: '/world', icon: Globe, label: 'World' },
   { to: '/settlements', icon: MapPin, label: 'Settlements' },
   { to: '/hex-map', icon: Map, label: 'Hex Map' },
   { to: '/network', icon: Network, label: 'Social Network' },
@@ -106,7 +108,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-100">Seldon Sandbox</div>
-          <div className="text-xs text-gray-500">v0.8.0</div>
+          <div className="text-xs text-gray-500">v0.9.0</div>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">

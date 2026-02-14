@@ -22,6 +22,7 @@ import { GeneticsView } from './components/views/genetics/GeneticsView';
 import { BeliefsView } from './components/views/beliefs/BeliefsView';
 import { InnerLifeView } from './components/views/inner-life/InnerLifeView';
 import { HexMapView } from './components/views/hex-map/HexMapView';
+import { WorldView } from './components/views/world/WorldView';
 import { BiographyView } from './components/views/biography/BiographyView';
 import { ChronicleView } from './components/views/chronicle/ChronicleView';
 import { AgentComparisonView } from './components/views/comparison/AgentComparisonView';
@@ -47,6 +48,7 @@ function AppContent() {
         <Route path="/lineage" element={<LineageView />} />
         <Route path="/compare" element={<AgentComparisonView />} />
         <Route path="/settlements" element={<SettlementDiagnosticsView />} />
+        <Route path="/world" element={<WorldView />} />
         <Route path="/hex-map" element={<HexMapView />} />
         <Route path="/network" element={<NetworkView />} />
         <Route path="/lore" element={<LoreEvolutionView />} />

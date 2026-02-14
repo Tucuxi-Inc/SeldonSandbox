@@ -15,6 +15,7 @@ Key design:
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -112,6 +113,38 @@ class TickEvents:
             "memories_created": self.memories_created,
             "lore_transmitted": self.lore_transmitted,
         }
+
+
+# ---------------------------------------------------------------------------
+# World-view activity capture (per-agent-per-tick data)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AgentTickActivity:
+    """What one agent did during one tick — for world-view visualization."""
+    agent_id: str
+    location: tuple[int, int] | None = None
+    previous_location: tuple[int, int] | None = None
+    activity: str | None = None            # gathering activity name
+    activity_need: str | None = None       # which need it satisfies
+    life_phase: str = ""
+    processing_region: str = ""
+    needs_snapshot: dict[str, float] = field(default_factory=dict)
+    health: float = 1.0
+    suffering: float = 0.0
+    is_pregnant: bool = False
+
+
+@dataclass
+class TickActivityLog:
+    """Snapshot of one tick's activity for the entire population."""
+    year: int
+    tick_in_year: int
+    global_tick: int
+    season: str
+    agent_activities: dict[str, AgentTickActivity] = field(default_factory=dict)
+    events: list[dict[str, Any]] = field(default_factory=list)
+    population_count: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +386,17 @@ class TickEngine:
 
         # Global tick counter (monotonically increasing across all years)
         self._global_tick = 0
+
+        # World-view activity capture (ring buffer of recent tick logs)
+        self._current_tick_log: TickActivityLog | None = None
+        self._tick_log_buffer: deque[TickActivityLog] = deque(maxlen=24)
+
+        # State for single-tick stepping mode
+        self._single_tick_year: int = 0
+        self._single_tick_in_year: int = 0
+        self._single_tick_events: TickEvents = TickEvents()
+        self._single_tick_contributions: dict[str, float] = {}
+        self._single_tick_initialized: bool = False
 
     # ------------------------------------------------------------------
     # Delegated properties (identical interface to SimulationEngine)
@@ -704,6 +748,303 @@ class TickEngine:
         return self._engine._build_snapshot(year, events, generation_contributions)
 
     # ------------------------------------------------------------------
+    # Year-end processing (extracted for reuse by _run_single_tick)
+    # ------------------------------------------------------------------
+
+    def _complete_year(
+        self, year: int, tick_events: TickEvents,
+        tick_contributions: dict[str, float],
+    ) -> GenerationSnapshot:
+        """Year-end processing: drift, epigenetics, mortality, snapshot.
+
+        Extracted from ``_run_year`` so that ``_run_single_tick`` can call
+        it at the 12th tick boundary without duplicating logic.
+        """
+        # Random trait drift (once per year)
+        for agent in self.population:
+            if agent.is_alive:
+                agent.traits = self._drift_adapter.apply_random_drift_yearly(
+                    agent, self.rng,
+                )
+
+        # Epigenetic updates (once per year)
+        if self._engine.epigenetic_model.enabled:
+            for agent in self.population:
+                if agent.is_alive:
+                    self._engine.epigenetic_model.update_epigenetic_state(
+                        agent, self.ts,
+                    )
+                    self._engine.epigenetic_model.apply_epigenetic_modifiers(
+                        agent, self.ts,
+                    )
+
+        # Record generation for all living agents
+        generation_contributions: list[float] = []
+        for agent in self.population:
+            if agent.is_alive:
+                contribution = tick_contributions.get(agent.id, 0.0)
+                agent.record_generation(contribution)
+                generation_contributions.append(contribution)
+
+                # Breakthrough check on yearly total
+                breakthrough = self._check_breakthrough(agent, contribution)
+                if breakthrough:
+                    tick_events.breakthroughs += 1
+                    if self.config.lore_enabled:
+                        mem = self._engine.lore_engine.create_breakthrough_memory(
+                            agent.id, year, contribution,
+                        )
+                        agent.personal_memories.append(mem.to_dict())
+                        tick_events.memories_created += 1
+
+                # Suffering memory for R4/R5 agents
+                if (self.config.lore_enabled
+                        and agent.suffering > 0.6
+                        and agent.processing_region in (
+                            ProcessingRegion.SACRIFICIAL,
+                            ProcessingRegion.PATHOLOGICAL,
+                        )):
+                    mem = self._engine.lore_engine.create_suffering_memory(
+                        agent.id, year, agent.suffering,
+                    )
+                    agent.personal_memories.append(mem.to_dict())
+                    tick_events.memories_created += 1
+
+        # Dissolution checks (once per year)
+        dissolved = self._engine.relationship_manager.process_dissolutions(
+            self.population, year, self.rng,
+        )
+        tick_events.dissolutions += len(dissolved)
+
+        # Infidelity checks (once per year)
+        infidelity = self._engine.relationship_manager.check_infidelity(
+            self.population, year, self.rng,
+        )
+        tick_events.infidelity_events += len(infidelity)
+
+        # Lore evolution (once per year)
+        if self.config.lore_enabled:
+            pop_memories = [
+                a.personal_memories + a.inherited_lore
+                for a in self.population
+            ]
+            self._engine.lore_engine.evolve_societal_lore(
+                pop_memories, year, self.rng,
+            )
+
+        # Outsider injection (once per year)
+        outsiders = self._engine.outsider_interface.process_scheduled_injections(
+            year, self.rng,
+        )
+        for outsider in outsiders:
+            outsider._age_ticks = int(outsider.age) * self._tpy
+            outsider.life_phase = classify_life_phase(
+                int(outsider.age), self._phase_boundaries,
+            ).value
+            if self._needs_system is not None:
+                self._needs_system.initialize_needs(outsider)
+
+            if self._hex_grid is not None:
+                tile = self._find_habitable_tile_near(self._starting_hex)
+                if tile is not None:
+                    self._hex_grid.place_agent(tile.q, tile.r, outsider.id)
+                    outsider.location = (tile.q, tile.r)
+                    outsider.extension_data["terrain_type"] = tile.terrain_type.value
+
+            self.population.append(outsider)
+            self._engine.ripple_tracker.track_injection(
+                self._engine.outsider_interface.injections[-1]
+            )
+        tick_events.outsiders_injected += len(outsiders)
+
+        self._engine.ripple_tracker.track_generation(self.population, year)
+
+        # Annual mortality check
+        for agent in self.population:
+            if not agent.is_alive:
+                continue
+            base = self.config.base_mortality_rate
+            age_component = agent.age * self.config.age_mortality_factor
+            burnout_component = agent.burnout_level * self.config.burnout_mortality_factor
+            mortality_breakdown = {
+                "base": round(float(base), 6),
+                "age": round(float(age_component), 6),
+                "burnout": round(float(burnout_component), 6),
+            }
+            death_rate = float(np.clip(base + age_component + burnout_component, 0.0, 1.0))
+
+            if self._needs_system is not None:
+                needs_factor = self._needs_system.compute_needs_mortality_factor(agent)
+                if abs(needs_factor) > 1e-9:
+                    mortality_breakdown["needs"] = round(float(needs_factor), 6)
+                death_rate += needs_factor
+
+            pre_ext_rate = death_rate
+            for ext in self.extensions.get_enabled():
+                death_rate = ext.modify_mortality(agent, death_rate, self.config)
+            ext_modifier = death_rate - pre_ext_rate
+            if abs(ext_modifier) > 1e-9:
+                mortality_breakdown["extensions"] = round(float(ext_modifier), 6)
+
+            death_rate = float(np.clip(death_rate, 0.0, 1.0))
+            if self.rng.random() < death_rate:
+                agent.is_alive = False
+                tick_events.deaths += 1
+                primary_cause = max(mortality_breakdown, key=lambda k: mortality_breakdown[k])
+                agent.extension_data["death_info"] = {
+                    "generation": year,
+                    "age_at_death": int(agent.age),
+                    "mortality_breakdown": mortality_breakdown,
+                    "primary_cause": primary_cause,
+                    "total_mortality_rate": round(death_rate, 6),
+                    "processing_region_at_death": agent.processing_region.value,
+                    "suffering_at_death": round(float(agent.suffering), 4),
+                    "burnout_at_death": round(float(agent.burnout_level), 4),
+                }
+
+                if self._hex_grid is not None and agent.location is not None:
+                    self._hex_grid.remove_agent(
+                        agent.location[0], agent.location[1], agent.id,
+                    )
+
+                if agent.partner_id:
+                    partner = self._engine._find_agent(agent.partner_id)
+                    if partner:
+                        partner.partner_id = None
+                        partner.relationship_status = "widowed"
+
+                # Record death event in current tick log
+                if self._current_tick_log is not None:
+                    self._current_tick_log.events.append({
+                        "type": "death",
+                        "agent_id": agent.id,
+                        "agent_name": agent.name,
+                        "location": list(agent.location) if agent.location else None,
+                        "age": int(agent.age),
+                        "primary_cause": primary_cause,
+                    })
+
+        # Remove dead agents
+        self.population = [a for a in self.population if a.is_alive]
+
+        # Phase C: re-detect settlements and apply governance (yearly)
+        if self._economics_ext is not None:
+            self._economics_ext.detect_settlements(
+                self, self.population, self.config,
+            )
+            self._economics_ext._apply_governance_all(
+                self.population, self.config,
+            )
+
+        # Extension hooks: year end + metrics
+        for ext in self.extensions.get_enabled():
+            ext.on_generation_end(year, self.population, self.config)
+
+        events = tick_events.to_events_dict()
+        for ext in self.extensions.get_enabled():
+            ext_metrics = ext.get_metrics(self.population)
+            if ext_metrics:
+                events[f"ext_{ext.name}"] = ext_metrics
+
+        return self._engine._build_snapshot(year, events, generation_contributions)
+
+    # ------------------------------------------------------------------
+    # Single-tick stepping (for World View)
+    # ------------------------------------------------------------------
+
+    def _run_single_tick(self) -> TickActivityLog:
+        """Run exactly one tick. Manages year boundaries.
+
+        Used by the World View to advance the simulation one month at a time
+        instead of a full year. Returns the activity log for visualization.
+        """
+        if not self._single_tick_initialized:
+            self._single_tick_year = 0
+            self._single_tick_in_year = 0
+            self._single_tick_events = TickEvents()
+            self._single_tick_contributions = {
+                a.id: 0.0 for a in self.population
+            }
+            self._single_tick_initialized = True
+
+        year = self._single_tick_year
+        tick_in_year = self._single_tick_in_year
+        season = _get_season(tick_in_year)
+
+        # Extension hook: year start (only on first tick of year)
+        if tick_in_year == 0:
+            for ext in self.extensions.get_enabled():
+                ext.on_generation_start(year, self.population, self.config)
+
+        # Create activity log for this tick
+        self._current_tick_log = TickActivityLog(
+            year=year,
+            tick_in_year=tick_in_year,
+            global_tick=self._global_tick,
+            season=season.value,
+            population_count=sum(1 for a in self.population if a.is_alive),
+        )
+
+        # Run the tick
+        self._run_tick(
+            year, tick_in_year, season,
+            self._single_tick_events, self._single_tick_contributions,
+        )
+        self._global_tick += 1
+
+        # After tick: populate agent activities snapshot
+        for agent in self.population:
+            if not agent.is_alive:
+                continue
+            ata = self._current_tick_log.agent_activities.get(agent.id)
+            if ata is None:
+                ata = AgentTickActivity(agent_id=agent.id)
+                self._current_tick_log.agent_activities[agent.id] = ata
+            # Fill in final state
+            ata.location = tuple(agent.location) if agent.location else None
+            ata.life_phase = getattr(agent, "life_phase", "")
+            ata.processing_region = agent.processing_region.value
+            ata.needs_snapshot = dict(agent.needs) if agent.needs else {}
+            ata.health = round(float(getattr(agent, "health", 1.0)), 4)
+            ata.suffering = round(float(agent.suffering), 4)
+            ata.is_pregnant = bool(agent.extension_data.get("pregnant", False))
+
+        # Update population count after any births/deaths during tick
+        self._current_tick_log.population_count = sum(
+            1 for a in self.population if a.is_alive
+        )
+
+        # Store in ring buffer
+        completed_log = self._current_tick_log
+        self._tick_log_buffer.append(completed_log)
+        self._current_tick_log = None
+
+        # Advance tick counter
+        self._single_tick_in_year += 1
+        year_complete = False
+
+        if self._single_tick_in_year >= self._tpy:
+            # Year complete — run year-end processing
+            snapshot = self._complete_year(
+                year, self._single_tick_events, self._single_tick_contributions,
+            )
+            self.history.append(snapshot)
+
+            # Reset for next year
+            self._single_tick_in_year = 0
+            self._single_tick_year += 1
+            self._single_tick_events = TickEvents()
+            self._single_tick_contributions = {
+                a.id: 0.0 for a in self.population
+            }
+            year_complete = True
+
+        # Annotate the log with year_complete flag
+        completed_log.year_complete = year_complete  # type: ignore[attr-defined]
+
+        return completed_log
+
+    # ------------------------------------------------------------------
     # Per-tick processing
     # ------------------------------------------------------------------
 
@@ -769,6 +1110,10 @@ class TickEngine:
             )
         events.pairs_formed += pairs
 
+        # Record pairing events (pairs is a count, not details — we can't get
+        # names here without changing the adapter, so we just record the count)
+        # Individual pair events are captured by the adapter if needed in future.
+
         # --- Conception checks ---
         conceived = self._repro_adapter.tick_conception_check(
             self.population, self._global_tick, year, self.rng,
@@ -805,6 +1150,19 @@ class TickEngine:
                 self.population.append(child)
                 tick_contributions[child.id] = 0.0
                 events.births += 1
+
+                # Record birth event in activity log
+                if self._current_tick_log is not None:
+                    self._current_tick_log.events.append({
+                        "type": "birth",
+                        "child_id": child.id,
+                        "child_name": child.name,
+                        "mother_id": mother.id,
+                        "mother_name": mother.name,
+                        "father_id": partner.id,
+                        "father_name": partner.name,
+                        "location": list(child.location) if child.location else None,
+                    })
 
                 # Extension hook: agent created
                 for ext in self.extensions.get_enabled():
@@ -845,6 +1203,8 @@ class TickEngine:
             # Gather resources (if capable) — two activities per tick
             if gs.can_gather(agent):
                 prioritized = ns.prioritize_needs(agent, ts)
+                first_activity = None
+                first_need = None
                 for _attempt in range(2):
                     activity = gs.choose_activity(
                         agent, prioritized, terrain, season.value, ts,
@@ -854,8 +1214,20 @@ class TickEngine:
                     )
                     need_name = _activity_satisfies(activity)
                     gs.satisfy_need(agent, need_name, gathered)
+                    if first_activity is None:
+                        first_activity = activity
+                        first_need = need_name
                     # Re-prioritize after first gather
                     prioritized = ns.prioritize_needs(agent, ts)
+
+                # Record primary gathering activity in tick log
+                if self._current_tick_log is not None and first_activity:
+                    ata = self._current_tick_log.agent_activities.get(agent.id)
+                    if ata is None:
+                        ata = AgentTickActivity(agent_id=agent.id)
+                        self._current_tick_log.agent_activities[agent.id] = ata
+                    ata.activity = first_activity
+                    ata.activity_need = first_need
 
         # Caregiver sharing pass
         for agent in self.population:
@@ -1030,6 +1402,17 @@ class TickEngine:
             )
 
             chosen = result.chosen_action
+
+            # Record movement in activity log
+            if self._current_tick_log is not None:
+                prev_loc = tuple(agent.location) if agent.location else None
+                ata = self._current_tick_log.agent_activities.get(agent.id)
+                if ata is None:
+                    ata = AgentTickActivity(agent_id=agent.id)
+                    self._current_tick_log.agent_activities[agent.id] = ata
+                if chosen != "stay":
+                    ata.previous_location = prev_loc
+
             if chosen != "stay":
                 dest_tile = action_tiles[chosen]
                 self._move_agent_to(agent, dest_tile, agent_map, dependent_ids)

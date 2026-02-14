@@ -497,6 +497,18 @@ export async function getExperientialDrift(sessionId: string): Promise<Experient
   return data;
 }
 
+// === World View / Tick ===
+
+export async function stepTick(sessionId: string): Promise<import('../types').TickStateResponse> {
+  const { data } = await api.post(`/hex/${sessionId}/step-tick`);
+  return data;
+}
+
+export async function getTickState(sessionId: string): Promise<import('../types').TickStateResponse> {
+  const { data } = await api.get(`/hex/${sessionId}/tick-state`);
+  return data;
+}
+
 // === Hex Grid ===
 
 export async function getHexGrid(sessionId: string): Promise<HexGridResponse> {

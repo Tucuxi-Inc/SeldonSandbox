@@ -1,4 +1,4 @@
-"""Hex grid map endpoints: full grid view and tile detail."""
+"""Hex grid map endpoints: full grid view, tile detail, and tick stepping."""
 
 from __future__ import annotations
 
@@ -9,6 +9,44 @@ from fastapi import APIRouter, HTTPException, Request
 from seldon.api.serializers import serialize_agent_summary
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# World View: Tick-level stepping
+# ---------------------------------------------------------------------------
+
+@router.post("/{session_id}/step-tick")
+def step_tick(session_id: str, request: Request) -> dict[str, Any]:
+    """Advance the simulation by one tick (1/12 of a year).
+
+    Only works with tick-engine sessions (tick_config.enabled=True).
+    Returns the activity log for world-view visualization.
+    """
+    mgr = request.app.state.session_manager
+    try:
+        return mgr.step_tick(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/{session_id}/tick-state")
+def get_tick_state(session_id: str, request: Request) -> dict[str, Any]:
+    """Current tick state without advancing (for page load / reconnect).
+
+    Returns ``{"enabled": false}`` if the session does not use the tick engine.
+    """
+    mgr = request.app.state.session_manager
+    try:
+        session = mgr.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+    if not hasattr(session.engine, "_run_single_tick"):
+        return {"enabled": False}
+
+    return mgr._build_tick_response(session)
 
 
 def _get_hex_grid(session):

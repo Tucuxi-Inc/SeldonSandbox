@@ -130,3 +130,52 @@ export const SEVERITY_COLORS: Record<string, string> = {
 };
 
 export const COMPARISON_COLORS = ['#3B82F6', '#F59E0B', '#10B981'];
+
+// === World View ===
+
+export const ACTIVITY_ICONS: Record<string, string> = {
+  forage: '\u{1F33F}',
+  hunt: '\u{1F3F9}',
+  fish: '\u{1F41F}',
+  find_water: '\u{1F4A7}',
+  build_shelter: '\u{1F3E0}',
+  seek_warmth: '\u{1F525}',
+  rest: '\u{1F4A4}',
+  seek_safety: '\u{1F6E1}',
+};
+
+export const ACTIVITY_LABELS: Record<string, string> = {
+  forage: 'Foraging',
+  hunt: 'Hunting',
+  fish: 'Fishing',
+  find_water: 'Finding Water',
+  build_shelter: 'Building Shelter',
+  seek_warmth: 'Seeking Warmth',
+  rest: 'Resting',
+  seek_safety: 'Seeking Safety',
+};
+
+export const SEASON_COLORS: Record<string, string> = {
+  spring: 'rgba(34, 197, 94, 0.05)',
+  summer: 'rgba(250, 204, 21, 0.05)',
+  autumn: 'rgba(249, 115, 22, 0.05)',
+  winter: 'rgba(96, 165, 250, 0.08)',
+};
+
+export const LIFE_PHASE_SIZES: Record<string, number> = {
+  infant: 2,
+  child: 3,
+  adolescent: 3.5,
+  young_adult: 4,
+  mature: 5,
+  middle_aged: 4.5,
+  elder: 4,
+  ancient: 3.5,
+};
+
+export const SPEED_PRESETS = [
+  { label: '1x', ms: 2000 },
+  { label: '2x', ms: 1000 },
+  { label: '4x', ms: 500 },
+  { label: '10x', ms: 200 },
+];

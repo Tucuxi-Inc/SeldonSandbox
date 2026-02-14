@@ -558,6 +558,42 @@ export interface ExperientialDriftResponse {
   agents_with_drift: number;
 }
 
+// === World View / Tick State ===
+
+export interface AgentTickActivity {
+  agent_id: string;
+  location: number[] | null;
+  previous_location: number[] | null;
+  activity: string | null;
+  activity_need: string | null;
+  life_phase: string;
+  processing_region: string;
+  needs_snapshot: Record<string, number>;
+  health: number;
+  suffering: number;
+  is_pregnant: boolean;
+}
+
+export interface TickEvent {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface TickStateResponse {
+  enabled: boolean;
+  year: number;
+  tick_in_year: number;
+  global_tick: number;
+  season: string;
+  population_count: number;
+  year_complete: boolean;
+  session_status: string;
+  current_generation: number;
+  agent_activities: Record<string, AgentTickActivity>;
+  events: TickEvent[];
+  agent_names: Record<string, string>;
+}
+
 // === Hex Grid ===
 
 export interface HexTileData {

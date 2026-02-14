@@ -302,6 +302,130 @@ class SessionManager:
         self._persist_session(session)
         return session
 
+    def step_tick(self, session_id: str) -> dict[str, Any]:
+        """Advance a tick-engine session by one tick (1/12 of a year).
+
+        Returns a dict with the tick activity log for world-view visualization.
+        Raises ValueError if the session does not use the tick engine.
+        """
+        session = self.get_session(session_id)
+
+        if not hasattr(session.engine, "_run_single_tick"):
+            raise ValueError(
+                "Tick stepping requires tick engine (tick_config.enabled=True)"
+            )
+
+        if session.status == "completed":
+            return self._build_tick_response(session)
+
+        session.status = "running"
+
+        # Store agents before tick (some may die at year-end)
+        for agent in session.engine.population:
+            session.all_agents[agent.id] = agent
+
+        # Run one tick
+        tick_log = session.engine._run_single_tick()
+
+        # Store new agents (children born this tick)
+        for agent in session.engine.population:
+            session.all_agents[agent.id] = agent
+
+        # Check if year completed
+        year_complete = getattr(tick_log, "year_complete", False)
+        if year_complete:
+            # Collect metrics for the completed year
+            latest_snapshot = session.engine.history[-1]
+            session.collector.collect(session.engine.population, latest_snapshot)
+            session.current_generation = tick_log.year + 1
+
+            if session.current_generation >= session.max_generations:
+                session.status = "completed"
+
+            # Auto-save at year boundaries only
+            self._persist_session(session)
+
+        return self._build_tick_response(session, tick_log)
+
+    def _build_tick_response(
+        self, session: "SimulationSession",
+        tick_log: Any = None,
+    ) -> dict[str, Any]:
+        """Build the JSON-serializable response for a tick step."""
+        engine = session.engine
+
+        if tick_log is None:
+            # No tick log — return current state without advancing
+            buffer = getattr(engine, "_tick_log_buffer", None)
+            if buffer and len(buffer) > 0:
+                tick_log = buffer[-1]
+            else:
+                return {
+                    "enabled": True,
+                    "year": getattr(engine, "_single_tick_year", 0),
+                    "tick_in_year": getattr(engine, "_single_tick_in_year", 0),
+                    "global_tick": getattr(engine, "_global_tick", 0),
+                    "season": "",
+                    "population_count": sum(
+                        1 for a in engine.population if a.is_alive
+                    ),
+                    "year_complete": False,
+                    "session_status": session.status,
+                    "current_generation": session.current_generation,
+                    "agent_activities": {},
+                    "events": [],
+                    "agent_names": {},
+                }
+
+        # Serialize agent activities
+        activities: dict[str, dict[str, Any]] = {}
+        for aid, ata in tick_log.agent_activities.items():
+            activities[aid] = {
+                "agent_id": ata.agent_id,
+                "location": list(ata.location) if ata.location else None,
+                "previous_location": (
+                    list(ata.previous_location) if ata.previous_location else None
+                ),
+                "activity": ata.activity,
+                "activity_need": ata.activity_need,
+                "life_phase": ata.life_phase,
+                "processing_region": ata.processing_region,
+                "needs_snapshot": ata.needs_snapshot,
+                "health": ata.health,
+                "suffering": ata.suffering,
+                "is_pregnant": ata.is_pregnant,
+            }
+
+        # Build agent names map (for event display)
+        agent_names: dict[str, str] = {}
+        for aid in tick_log.agent_activities:
+            agent = session.all_agents.get(aid)
+            if agent:
+                agent_names[aid] = agent.name
+        # Also include agents mentioned in events
+        for evt in tick_log.events:
+            for key in ("agent_id", "child_id", "mother_id", "father_id"):
+                aid = evt.get(key)
+                if aid and aid not in agent_names:
+                    agent = session.all_agents.get(aid)
+                    if agent:
+                        agent_names[aid] = agent.name
+
+        return {
+            "enabled": True,
+            "year": tick_log.year,
+            "tick_in_year": tick_log.tick_in_year,
+            "global_tick": tick_log.global_tick,
+            "season": tick_log.season,
+            "population_count": tick_log.population_count,
+            "year_complete": getattr(tick_log, "year_complete", False),
+            "session_status": session.status,
+            "current_generation": session.current_generation,
+            "agent_activities": activities,
+            "events": tick_log.events,
+            "agent_names": agent_names,
+        }
+
     def run_full(self, session_id: str) -> SimulationSession:
         """Run a session to completion."""
         session = self.get_session(session_id)
