@@ -45,3 +45,8 @@ data/*.db
 # Handoff / working docs (not for repo)
 HANDOFF.md
 .claude/
+
+# Docs folder (planning docs, conversation transcripts - keep private)
+# But include screenshots for README
+docs/*
+!docs/screenshots/
