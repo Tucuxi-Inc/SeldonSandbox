@@ -561,3 +561,104 @@ class SessionStore:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+
+# ---------------------------------------------------------------------------
+# NarrativeCache — stores generated biographies, chronicles, etc.
+# ---------------------------------------------------------------------------
+
+_NARRATIVE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS narrative_cache (
+    session_id TEXT NOT NULL,
+    cache_type TEXT NOT NULL,
+    cache_key TEXT NOT NULL,
+    content TEXT NOT NULL,
+    model TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, cache_type, cache_key)
+);
+"""
+
+
+class NarrativeCache:
+    """Caches LLM-generated narratives in SQLite or in-memory.
+
+    Falls back to a plain dict when no database is available.
+    """
+
+    def __init__(self, db_path: str | None = None):
+        self._conn: sqlite3.Connection | None = None
+        self._memory: dict[str, str] = {}
+        if db_path is not None:
+            try:
+                self._conn = sqlite3.connect(db_path, check_same_thread=False)
+                self._conn.execute(_NARRATIVE_SCHEMA)
+                self._conn.commit()
+            except Exception:
+                logger.warning("NarrativeCache: failed to open DB, using in-memory", exc_info=True)
+                self._conn = None
+
+    def _key(self, session_id: str, cache_type: str, cache_key: str) -> str:
+        return f"{session_id}:{cache_type}:{cache_key}"
+
+    def get(self, session_id: str, cache_type: str, cache_key: str) -> str | None:
+        """Retrieve a cached narrative. Returns None if not found."""
+        if self._conn is not None:
+            try:
+                cur = self._conn.execute(
+                    "SELECT content FROM narrative_cache WHERE session_id=? AND cache_type=? AND cache_key=?",
+                    (session_id, cache_type, cache_key),
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
+            except Exception:
+                pass
+        return self._memory.get(self._key(session_id, cache_type, cache_key))
+
+    def put(
+        self, session_id: str, cache_type: str, cache_key: str,
+        content: str, model: str | None = None,
+    ) -> None:
+        """Store a narrative in the cache."""
+        if self._conn is not None:
+            try:
+                now = datetime.now(timezone.utc).isoformat()
+                self._conn.execute(
+                    """INSERT INTO narrative_cache (session_id, cache_type, cache_key, content, model, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(session_id, cache_type, cache_key) DO UPDATE SET
+                           content=excluded.content, model=excluded.model, created_at=excluded.created_at""",
+                    (session_id, cache_type, cache_key, content, model, now),
+                )
+                self._conn.commit()
+                return
+            except Exception:
+                pass
+        self._memory[self._key(session_id, cache_type, cache_key)] = content
+
+    def invalidate_session(self, session_id: str) -> None:
+        """Remove all cached narratives for a session."""
+        if self._conn is not None:
+            try:
+                self._conn.execute(
+                    "DELETE FROM narrative_cache WHERE session_id=?", (session_id,),
+                )
+                self._conn.commit()
+            except Exception:
+                pass
+        keys_to_remove = [k for k in self._memory if k.startswith(f"{session_id}:")]
+        for k in keys_to_remove:
+            del self._memory[k]
+
+    def invalidate(self, session_id: str, cache_type: str, cache_key: str) -> None:
+        """Remove a specific cached narrative."""
+        if self._conn is not None:
+            try:
+                self._conn.execute(
+                    "DELETE FROM narrative_cache WHERE session_id=? AND cache_type=? AND cache_key=?",
+                    (session_id, cache_type, cache_key),
+                )
+                self._conn.commit()
+            except Exception:
+                pass
+        self._memory.pop(self._key(session_id, cache_type, cache_key), None)

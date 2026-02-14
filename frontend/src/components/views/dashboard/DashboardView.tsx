@@ -4,7 +4,7 @@ import * as api from '../../../api/client';
 import type { PresetInfo, ArchetypeInfo } from '../../../types';
 
 export function DashboardView() {
-  const { activeSessionId, sessions, refreshAll, setActiveSession } = useSimulationStore();
+  const { activeSessionId, sessions, refreshAll, setActiveSession, updateSession } = useSimulationStore();
   const active = sessions.find((s) => s.id === activeSessionId);
 
   const [presets, setPresets] = useState<PresetInfo[]>([]);
@@ -18,7 +18,8 @@ export function DashboardView() {
     lore_enabled: true,
     cognitive_council_enabled: false,
   });
-  const [stepping, setStepping] = useState(false);
+  // Derive running state from session status
+  const isRunning = active?.status === 'running';
 
   // Outsider builder state
   const [outsiderMode, setOutsiderMode] = useState<'archetype' | 'custom'>('archetype');
@@ -71,25 +72,37 @@ export function DashboardView() {
   };
 
   const handleStep = async (n: number) => {
-    if (!activeSessionId) return;
-    setStepping(true);
+    if (!activeSessionId || isRunning) return;
     await api.stepSession(activeSessionId, n);
     await refreshAll();
-    setStepping(false);
   };
 
   const handleRunAll = async () => {
-    if (!activeSessionId) return;
-    setStepping(true);
-    await api.runSession(activeSessionId);
-    await refreshAll();
-    setStepping(false);
+    if (!activeSessionId || isRunning) return;
+    const resp = await api.runSession(activeSessionId);
+    // Immediately reflect "running" status so polling activates
+    updateSession(resp);
+    // Then do a full refresh to pick up metrics/agents
+    refreshAll();
   };
 
   const handleReset = async () => {
     if (!activeSessionId) return;
     await api.resetSession(activeSessionId);
     await refreshAll();
+  };
+
+  const handleFork = async () => {
+    if (!activeSessionId) return;
+    try {
+      const cloned = await api.cloneSession(activeSessionId, {
+        name: `${active?.name ?? 'Session'} (Fork)`,
+      });
+      setActiveSession(cloned.id);
+      await refreshAll();
+    } catch {
+      // ignore
+    }
   };
 
   const handleInject = async () => {
@@ -186,6 +199,24 @@ export function DashboardView() {
             <div className="mt-4 flex items-center gap-4">
               <ToggleField label="Lore Enabled" value={config.lore_enabled as boolean} onChange={(v) => updateConfig('lore_enabled', v)} />
               <ToggleField label="Cognitive Council" value={config.cognitive_council_enabled as boolean} onChange={(v) => updateConfig('cognitive_council_enabled', v)} />
+              <ToggleField
+                label="Tick Engine"
+                value={!!((config.tick_config as Record<string, unknown>)?.enabled)}
+                onChange={(v) => updateNestedConfig('tick_config', 'enabled', v)}
+              />
+              <ToggleField
+                label="Hex Grid"
+                value={!!((config.hex_grid_config as Record<string, unknown>)?.enabled)}
+                onChange={(v) => {
+                  setConfig((prev) => {
+                    const hexCfg = (prev.hex_grid_config as Record<string, unknown>) ?? {};
+                    const tickCfg = (prev.tick_config as Record<string, unknown>) ?? {};
+                    const next: Record<string, unknown> = { ...prev, hex_grid_config: { ...hexCfg, enabled: v } };
+                    if (v) next.tick_config = { ...tickCfg, enabled: true };
+                    return next;
+                  });
+                }}
+              />
             </div>
 
             {/* Extension Toggles */}
@@ -241,6 +272,16 @@ export function DashboardView() {
                   label="Environment"
                   value={isExtEnabled('environment')}
                   onChange={(v) => toggleExtension('environment', v, ['geography'])}
+                />
+                <ToggleField
+                  label="Epistemology"
+                  value={isExtEnabled('epistemology')}
+                  onChange={(v) => toggleExtension('epistemology', v)}
+                />
+                <ToggleField
+                  label="Inner Life"
+                  value={isExtEnabled('inner_life')}
+                  onChange={(v) => toggleExtension('inner_life', v)}
                 />
               </div>
             </div>
@@ -319,31 +360,39 @@ export function DashboardView() {
               </button>
               <button
                 onClick={() => handleStep(1)}
-                disabled={!activeSessionId || stepping || active?.status === 'completed'}
+                disabled={!activeSessionId || isRunning || active?.status === 'completed'}
                 className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
               >
                 Step +1
               </button>
               <button
                 onClick={() => handleStep(5)}
-                disabled={!activeSessionId || stepping || active?.status === 'completed'}
+                disabled={!activeSessionId || isRunning || active?.status === 'completed'}
                 className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
               >
                 Step +5
               </button>
               <button
                 onClick={handleRunAll}
-                disabled={!activeSessionId || stepping || active?.status === 'completed'}
+                disabled={!activeSessionId || isRunning || active?.status === 'completed'}
                 className="rounded-md bg-green-700 px-4 py-2 text-sm font-medium text-white hover:bg-green-600 disabled:opacity-40"
               >
-                {stepping ? 'Running...' : 'Run All'}
+                {isRunning ? 'Running...' : 'Run All'}
               </button>
               <button
                 onClick={handleReset}
-                disabled={!activeSessionId || stepping}
+                disabled={!activeSessionId || isRunning}
                 className="rounded-md bg-gray-700 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-600 disabled:opacity-40"
               >
                 Reset
+              </button>
+              <button
+                onClick={handleFork}
+                disabled={!activeSessionId || isRunning || active?.current_generation === 0}
+                className="rounded-md bg-purple-700 px-4 py-2 text-sm font-medium text-white hover:bg-purple-600 disabled:opacity-40"
+                title="Fork this session to create a what-if branch"
+              >
+                Fork
               </button>
             </div>
           </div>
@@ -366,6 +415,16 @@ export function DashboardView() {
               <div className="mt-2 text-sm text-gray-400">
                 Population: <span className="font-mono text-gray-200">{active.population_size}</span>
               </div>
+              {isRunning && (
+                <div className="mt-2 text-sm text-blue-400 animate-pulse">
+                  Simulating generation {active.current_generation} of {active.max_generations}...
+                </div>
+              )}
+              {active.status === 'error' && (
+                <div className="mt-2 text-sm text-red-400">
+                  Simulation error — check server logs
+                </div>
+              )}
             </div>
           )}
 

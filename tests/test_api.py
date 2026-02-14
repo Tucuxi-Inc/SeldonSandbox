@@ -1,5 +1,7 @@
 """Integration tests for the Seldon Sandbox REST API."""
 
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,6 +12,18 @@ from seldon.api.app import create_app
 def client():
     app = create_app()
     return TestClient(app)
+
+
+def _run_and_wait(client, sid, timeout=10):
+    """Fire async run and poll until completed."""
+    client.post(f"/api/simulation/sessions/{sid}/run", json={})
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        data = client.get(f"/api/simulation/sessions/{sid}").json()
+        if data["status"] == "completed":
+            return data
+        time.sleep(0.05)
+    raise TimeoutError(f"Session {sid} did not complete within {timeout}s")
 
 
 class TestHealthCheck:
@@ -106,8 +120,7 @@ class TestStepAndRun:
         })
         sid = create_resp.json()["id"]
 
-        resp = client.post(f"/api/simulation/sessions/{sid}/run", json={})
-        data = resp.json()
+        data = _run_and_wait(client, sid)
         assert data["current_generation"] == 5
         assert data["status"] == "completed"
 
@@ -278,13 +291,13 @@ class TestExperiments:
             "config": {"initial_population": 20, "generations_to_run": 3, "random_seed": 42},
         })
         sid1 = r1.json()["id"]
-        client.post(f"/api/simulation/sessions/{sid1}/run", json={})
+        _run_and_wait(client, sid1)
 
         r2 = client.post("/api/simulation/sessions", json={
             "config": {"initial_population": 20, "generations_to_run": 3, "random_seed": 42, "trait_drift_rate": 0.1},
         })
         sid2 = r2.json()["id"]
-        client.post(f"/api/simulation/sessions/{sid2}/run", json={})
+        _run_and_wait(client, sid2)
 
         resp = client.post("/api/experiments/compare", json={"session_ids": [sid1, sid2]})
         assert resp.status_code == 200

@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from seldon.api.serializers import serialize_agent_detail, serialize_agent_summary, serialize_metrics
+from seldon.api.serializers import serialize_agent_detail, serialize_agent_summary, serialize_agent_at_generation, serialize_metrics
 from seldon.llm.client import (
     ANTHROPIC_MODELS,
     ClaudeClient,
@@ -33,6 +33,14 @@ _runtime_ollama_url: str | None = None
 
 class InterviewRequest(BaseModel):
     question: str
+    conversation_history: list[dict[str, str]] | None = None
+    provider: str = "anthropic"
+    model: str | None = None
+
+
+class HistoricalInterviewRequest(BaseModel):
+    question: str
+    target_generation: int
     conversation_history: list[dict[str, str]] | None = None
     provider: str = "anthropic"
     model: str | None = None
@@ -257,6 +265,96 @@ def interview_agent(
         "input_tokens": resp.input_tokens,
         "output_tokens": resp.output_tokens,
         "provider": body.provider,
+    }
+
+
+@router.post("/{session_id}/interview/{agent_id}/historical")
+def interview_agent_historical(
+    session_id: str,
+    agent_id: str,
+    body: HistoricalInterviewRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Interview an agent at a specific past generation."""
+    mgr = request.app.state.session_manager
+    try:
+        session = mgr.get_session(session_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+
+    agent = session.all_agents.get(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail=f"Agent '{agent_id}' not found")
+
+    # Validate generation range
+    birth_gen = int(agent.generation)
+    lived_gens = len(agent.contribution_history)
+    last_gen = birth_gen + lived_gens - 1 if lived_gens > 0 else birth_gen
+
+    if body.target_generation < birth_gen or body.target_generation > last_gen:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Generation {body.target_generation} is outside agent's lived range [{birth_gen}, {last_gen}]",
+        )
+
+    ts = session.config.trait_system
+    agent_snapshot = serialize_agent_at_generation(agent, ts, body.target_generation)
+
+    # Build context from historical snapshot
+    from seldon.llm.prompts import HISTORICAL_INTERVIEW_SYSTEM_PROMPT, build_agent_context
+
+    age_at_target = body.target_generation - birth_gen
+    system_prompt = HISTORICAL_INTERVIEW_SYSTEM_PROMPT.format(
+        name=agent.name,
+        age=age_at_target,
+        generation=body.target_generation,
+    )
+
+    # Build agent context from snapshot data
+    context_parts = [
+        f"NAME: {agent_snapshot['name']}",
+        f"AGE: {agent_snapshot['age']}",
+        f"GENERATION: {agent_snapshot['target_generation']}",
+        f"PROCESSING REGION: {agent_snapshot['processing_region']}",
+        f"RELATIONSHIP STATUS: {agent_snapshot['relationship_status']}",
+    ]
+    if agent_snapshot.get("traits"):
+        context_parts.append("\nPERSONALITY TRAITS:")
+        sorted_traits = sorted(agent_snapshot["traits"].items(), key=lambda x: x[1], reverse=True)
+        for name, val in sorted_traits:
+            context_parts.append(f"  {name}: {val:.2f}")
+
+    memories = agent_snapshot.get("personal_memories", [])
+    if memories:
+        context_parts.append(f"\nMEMORIES ({len(memories)} up to this point):")
+        for mem in memories[-5:]:
+            content = mem.get("content", mem.get("type", "memory"))
+            context_parts.append(f"  - {content}")
+
+    context = "\n".join(context_parts)
+
+    client = _make_client(body.provider, body.model)
+    try:
+        history = body.conversation_history or []
+        messages = [{"role": m["role"], "content": m["content"]} for m in history]
+        messages.append({"role": "user", "content": body.question})
+
+        resp = client.generate(
+            system_prompt=f"{system_prompt}\n\nCHARACTER CONTEXT:\n{context}",
+            user_message=body.question,
+            conversation_history=body.conversation_history,
+        )
+    except LLMUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    return {
+        "response": resp.text,
+        "model": resp.model,
+        "input_tokens": resp.input_tokens,
+        "output_tokens": resp.output_tokens,
+        "provider": body.provider,
+        "target_generation": body.target_generation,
+        "agent_age_at_generation": age_at_target,
     }
 
 

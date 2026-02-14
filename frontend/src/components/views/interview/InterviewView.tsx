@@ -397,8 +397,13 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Historical interview mode
+  const [historicalMode, setHistoricalMode] = useState(false);
+  const [targetGeneration, setTargetGeneration] = useState(0);
+  const [genRange, setGenRange] = useState<{ birth_generation: number; last_generation: number } | null>(null);
+
   useEffect(() => {
-    api.listAgents(sessionId, { alive_only: true, page_size: 200 })
+    api.listAgents(sessionId, { alive_only: false, page_size: 200 })
       .then((res) => setAgents(res.agents))
       .catch(() => {});
   }, [sessionId]);
@@ -407,9 +412,25 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Fetch generation range when agent is selected and historical mode is on
+  useEffect(() => {
+    if (!selectedAgent || !historicalMode) {
+      setGenRange(null);
+      return;
+    }
+    api.getAgentGenerationRange(sessionId, selectedAgent)
+      .then((range) => {
+        setGenRange(range);
+        setTargetGeneration(range.last_generation);
+      })
+      .catch(() => setGenRange(null));
+  }, [sessionId, selectedAgent, historicalMode]);
+
   const filteredAgents = agents.filter((a) =>
-    a.name.toLowerCase().includes(search.toLowerCase()) ||
-    a.id.toLowerCase().includes(search.toLowerCase())
+    a.has_decisions && (
+      a.name.toLowerCase().includes(search.toLowerCase()) ||
+      a.id.toLowerCase().includes(search.toLowerCase())
+    )
   );
 
   const handleAsk = async () => {
@@ -421,7 +442,14 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
 
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }));
-      const resp = await api.interviewAgent(sessionId, selectedAgent, q, history, provider, model || undefined);
+      let resp;
+      if (historicalMode && genRange) {
+        resp = await api.interviewAgentHistorical(
+          sessionId, selectedAgent, q, targetGeneration, history, provider, model || undefined,
+        );
+      } else {
+        resp = await api.interviewAgent(sessionId, selectedAgent, q, history, provider, model || undefined);
+      }
       setMessages((prev) => [...prev, { role: 'assistant', content: resp.response }]);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Interview request failed';
@@ -434,6 +462,8 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
     setSelectedAgent(id);
     setMessages([]);
   };
+
+  const selectedAgentObj = agents.find((a) => a.id === selectedAgent);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
@@ -457,7 +487,10 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
               }`}
             >
               <div className="font-medium">{a.name}</div>
-              <div className="text-xs text-gray-600">{a.processing_region} | age {a.age}</div>
+              <div className="text-xs text-gray-600">
+                {a.processing_region} | age {a.age}
+                {!a.is_alive && ' (dead)'}
+              </div>
             </button>
           ))}
           {filteredAgents.length === 0 && (
@@ -475,9 +508,48 @@ function InterviewTab({ sessionId, provider, model }: { sessionId: string; provi
         ) : (
           <>
             <div className="border-b border-gray-800 px-4 py-2">
-              <span className="text-sm font-medium text-gray-300">
-                Interviewing: {agents.find((a) => a.id === selectedAgent)?.name ?? selectedAgent}
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-300">
+                  Interviewing: {selectedAgentObj?.name ?? selectedAgent}
+                  {historicalMode && genRange && (
+                    <span className="ml-2 text-xs text-amber-400">
+                      at Generation {targetGeneration}, age {targetGeneration - genRange.birth_generation}
+                    </span>
+                  )}
+                </span>
+                <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={historicalMode}
+                    onChange={(e) => {
+                      setHistoricalMode(e.target.checked);
+                      setMessages([]);
+                    }}
+                    className="rounded border-gray-600 bg-gray-800 text-amber-600 accent-amber-600"
+                  />
+                  Historical Mode
+                </label>
+              </div>
+              {historicalMode && genRange && (
+                <div className="mt-2 flex items-center gap-3">
+                  <span className="text-xs text-gray-500">Gen {genRange.birth_generation}</span>
+                  <input
+                    type="range"
+                    min={genRange.birth_generation}
+                    max={genRange.last_generation}
+                    value={targetGeneration}
+                    onChange={(e) => {
+                      setTargetGeneration(Number(e.target.value));
+                      setMessages([]);
+                    }}
+                    className="flex-1 accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">Gen {genRange.last_generation}</span>
+                  <span className="rounded bg-amber-900/40 px-2 py-0.5 text-xs font-mono text-amber-300">
+                    {targetGeneration}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto p-4" style={{ maxHeight: '24rem' }}>
               {messages.map((msg, i) => (
@@ -648,7 +720,7 @@ function DecisionExplorerTab({ sessionId, provider, model }: { sessionId: string
           onChange={(e) => setSelectedAgent(e.target.value)}
         >
           <option value="">Choose an agent...</option>
-          {agents.map((a) => (
+          {agents.filter((a) => a.has_decisions).map((a) => (
             <option key={a.id} value={a.id}>
               {a.name} ({a.processing_region})
             </option>

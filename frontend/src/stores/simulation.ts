@@ -22,6 +22,7 @@ interface SimulationStore {
   refreshMetrics: () => Promise<void>;
   refreshAgents: () => Promise<void>;
   refreshAll: () => Promise<void>;
+  updateSession: (summary: SessionSummary) => void;
 }
 
 export const useSimulationStore = create<SimulationStore>((set, get) => ({
@@ -72,5 +73,12 @@ export const useSimulationStore = create<SimulationStore>((set, get) => ({
     set({ loading: true });
     await Promise.all([get().refreshSessions(), get().refreshMetrics(), get().refreshAgents()]);
     set({ loading: false });
+  },
+
+  updateSession: (summary) => {
+    const sessions = get().sessions.map((s) =>
+      s.id === summary.id ? summary : s,
+    );
+    set({ sessions });
   },
 }));

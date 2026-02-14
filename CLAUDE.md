@@ -12,11 +12,12 @@ This is NOT a "reality simulator." It is a **what-if engine** — an experimenta
 
 1. **Everything is a slider** — No hardcoded assumptions. All thresholds, weights, rates, and rules come from `ExperimentConfig`. Never hardcode a magic number.
 2. **Track and visualize over time** — Every metric has a time series. History tracking on agents is not optional.
-3. **Compare runs** — A/B testing and parameter sweeps are first-class features.
+3. **Compare runs** — A/B testing, parameter sweeps, and session cloning (fork) are first-class features.
 4. **Core is simple, complexity is opt-in** — Extension architecture for optional modules.
 5. **Decisions are mathematical and explainable** — Utility-based model: `U(a|P,x) = P^T · W_a · x + b_a` with softmax. Per-trait contribution analysis for every decision.
 6. **Memory shapes behavior** — Generational lore with fidelity decay creates emergent mythology.
-7. **LLM for interviews only** — The simulation runs on pure math. LLMs are only used later for agent interviews and narrative generation.
+7. **LLM for narratives only** — The simulation runs on pure math. LLMs are used for biographies, chronicles, interviews, and explanations — never for determining what happens.
+8. **Every death tells a story** — Detailed cause-of-death tracking with mortality factor breakdown.
 
 ## Architecture Overview
 
@@ -33,6 +34,11 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
             │   ├── TraitDriftEngine (experience + age-based trait changes)
             │   ├── AttractionModel (similarity, complementarity, chemistry)
             │   ├── SimulationEngine (9-phase generation loop with extension hooks)
+            │   ├── TickEngine (12 ticks/year: needs, gathering, movement)
+            │   ├── HexGrid (axial coordinates, 10 terrain types, A* pathfinding)
+            │   ├── NeedsSystem (6 survival needs, terrain/season decay)
+            │   ├── GatheringSystem (8 activities, personality-modulated yields)
+            │   ├── ExperientialEngine (6-dim felt-quality, recall, phenomenal quality)
             │   ├── GeneticModel (allele pairs, crossover, mutation, expression)
             │   ├── EpigeneticModel (environmental markers, transgenerational inheritance)
             │   └── GeneticAttribution (lineage tracking, trait-gene correlation)
@@ -42,31 +48,39 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
             │   ├── LoreEngine (memory transmission, fidelity decay, myths)
             │   ├── SocialHierarchyManager (status, influence, role assignment)
             │   ├── MentorshipManager (matching, skill transfer, chains)
-            │   └── CommunityManager (detection, cohesion, factions)
+            │   ├── MarriageManager (courtship, formalization, divorce, political marriages)
+            │   ├── ClanManager (founders, ancestry, honor, rivalries)
+            │   ├── InstitutionManager (councils, guilds, elections, prestige)
+            │   ├── CommunityManager (detection, cohesion, factions)
+            │   └── BeliefSystem (formation, propagation, conflict, accuracy)
             ├── EXPERIMENT
             │   ├── ExperimentRunner, Presets
             │   ├── Archetypes (11 seed vectors: Da Vinci, Einstein, Curie, etc.)
             │   └── OutsiderInterface + RippleTracker
-            ├── EXTENSIONS (optional, via ExtensionRegistry — 10 modules)
+            ├── EXTENSIONS (optional, via ExtensionRegistry — 12 modules)
             │   ├── Geography, Migration (settlement composition analysis)
             │   ├── Resources, Technology
             │   ├── Culture/Memes, Conflict
-            │   ├── Social Dynamics (hierarchy + mentorship wired into hooks)
+            │   ├── Social Dynamics (hierarchy + mentorship + marriage + clans + institutions)
             │   ├── Diplomacy (alliances, rivalries, cultural exchange)
-            │   ├── Economics (production, trade, wealth, occupations)
+            │   ├── Economics (production, trade, wealth, occupations, governance)
             │   ├── Environment (seasons, climate, drought, plague, disease)
+            │   ├── Epistemology (belief formation, propagation, accuracy dynamics)
+            │   ├── Inner Life (experiential mind, phenomenal quality, experiential drift)
             │   └── SimulationExtension ABC with lifecycle + modifier hooks
-            ├── LLM (narrative layer, never affects simulation)
+            ├── LLM + NARRATIVE (never affects simulation)
             │   ├── ClaudeClient (Anthropic API) + OllamaClient (local, Docker-aware)
-            │   ├── AgentInterviewer (in-character conversations)
+            │   ├── AgentInterviewer (in-character conversations, current + historical mode)
             │   ├── NarrativeGenerator (prose summaries)
-            │   └── DecisionNarrator (psychological analysis)
+            │   ├── DecisionNarrator (psychological analysis)
+            │   ├── BiographyGenerator (structured + LLM-enriched agent biographies)
+            │   └── EventExtractor (chronicle: breakthroughs, deaths, suffering, outsiders)
             └── METRICS, API & PERSISTENCE
                 ├── MetricsCollector (per-generation stats)
-                ├── SessionManager (in-memory sessions with SQLite persistence)
+                ├── SessionManager (in-memory sessions with SQLite persistence + cloning)
                 ├── SessionStore (SQLite CRUD, zlib-compressed state blobs)
-                ├── FastAPI REST API (13 routers, 50+ endpoints)
-                └── React Dashboard (18 views, real-time updates)
+                ├── FastAPI REST API (17 routers, 70+ endpoints)
+                └── React Dashboard (24 views, real-time updates)
 ```
 
 ### Generation Loop Phases (9 phases in order)
@@ -77,7 +91,7 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
 5. **Relationship Dynamics** — Process dissolutions, form new pairs via decision model
 6. **Reproduction** — Paired agents produce children via inheritance engine (optionally with allele-based genetics); transmit lore
 7. **Lore Evolution** — Societal-level memory consensus, conflict, mutation
-8. **Mortality** — Age/burnout/extension-modified death checks; handle widowing
+8. **Mortality** — Age/burnout/extension-modified death checks with cause-of-death tracking; handle widowing
 9. **Extension Hooks** — Extensions fire at 8 lifecycle points: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, collect metrics
 
 ## The RSH Five Regions Model
@@ -164,24 +178,29 @@ agent.suffering_history.append(agent.suffering)
 ```
 seldon-sandbox/
 ├── src/seldon/
-│   ├── core/          # TraitSystem, Agent, Config, Engine, Inheritance,
+│   ├── core/          # TraitSystem, Agent, Config, Engine, TickEngine, HexGrid,
+│   │                  #   MapGenerators, NeedsSystem, GatheringSystem, Inheritance,
 │   │                  #   Processing, Drift, Attraction, DecisionModel, CognitiveCouncil,
-│   │                  #   GeneticModel, EpigeneticModel, GeneticAttribution
+│   │                  #   ExperientialEngine, GeneticModel, EpigeneticModel, GeneticAttribution
 │   ├── social/        # RelationshipManager, FertilityManager, LoreEngine,
-│   │                  #   SocialHierarchyManager, MentorshipManager, CommunityManager
+│   │                  #   SocialHierarchyManager, MentorshipManager, MarriageManager,
+│   │                  #   ClanManager, InstitutionManager, CommunityManager, BeliefSystem
 │   ├── metrics/       # MetricsCollector, export for visualization
 │   ├── experiment/    # ExperimentRunner, Presets, Archetypes, OutsiderInterface
-│   ├── extensions/    # SimulationExtension ABC, Registry, 10 extension modules
+│   ├── extensions/    # SimulationExtension ABC, Registry, 12 extension modules
 │   │                  #   (geography, migration, resources, technology, culture,
-│   │                  #    conflict, social_dynamics, diplomacy, economics, environment)
-│   ├── llm/           # ClaudeClient, OllamaClient, Interviewer, Narrator, Prompts
+│   │                  #    conflict, social_dynamics, diplomacy, economics, environment,
+│   │                  #    epistemology, inner_life)
+│   ├── llm/           # ClaudeClient, OllamaClient, Interviewer, Narrator,
+│   │                  #   BiographyGenerator, EventExtractor (Chronicle), Prompts
 │   └── api/           # FastAPI app, SessionManager, SessionStore (SQLite persistence),
-│                      #   Serializers, 13 routers (simulation, agents, metrics,
+│                      #   Serializers, 17 routers (simulation, agents, metrics,
 │                      #   experiments, settlements, network, advanced, llm, social,
-│                      #   communities, economics, environment, genetics)
-├── tests/             # 598 tests (pytest) + conftest.py for DB isolation
+│                      #   communities, economics, environment, genetics, beliefs,
+│                      #   inner_life, hex_grid, chronicle)
+├── tests/             # 969 tests (pytest) + conftest.py for DB isolation
 ├── frontend/          # React + TypeScript + Tailwind v4 + Recharts + D3
-│   └── src/components/views/  # 18 dashboard views across 6 sections
+│   └── src/components/views/  # 24 dashboard views across 7 sections
 ├── examples/          # run_baseline.py, run_phase2_demo.py
 └── docs/              # Architecture v3.0, handoff v2.0, conversation transcripts
 ```
@@ -192,7 +211,7 @@ seldon-sandbox/
 # Install dependencies (with API + dev extras)
 pip install -e ".[api,dev]"
 
-# Run all tests (598 tests)
+# Run all tests (969 tests)
 pytest tests/
 
 # Run a single test file
@@ -235,7 +254,7 @@ All phases complete. Current state of the system:
 
 **Phase 2 (Intelligence & Social):** CognitiveCouncil, LoreEngine, RelationshipManager, FertilityManager, MetricsCollector, ExperimentRunner, Presets, Archetypes, OutsiderInterface + RippleTracker — **COMPLETE**
 
-**Phase 3 (Visualization):** FastAPI backend (13 routers), React dashboard (18 views), Population, Suffering, Agent Explorer, Experiments, Family & Lineage — **COMPLETE**
+**Phase 3 (Visualization):** FastAPI backend, React dashboard, Population, Suffering, Agent Explorer, Experiments, Family & Lineage — **COMPLETE**
 
 **Phase 4 (Extensions):** Extension ABC + Registry, Geography, Migration, Resources, Technology, Culture/Memes, Conflict — **COMPLETE**
 
@@ -252,6 +271,22 @@ All phases complete. Current state of the system:
 **Phase 12 (Frontend Controls):** Dashboard controls for all 10 extensions, outsider builder, 6 new views, genetics API router — **COMPLETE**
 
 **Persistence:** SQLite session persistence with auto-save, lazy loading, compressed state blobs — **COMPLETE**
+
+**Phase A (Tick Engine + Hex Grid + Needs):** TickEngine (12 ticks/year adapter), HexGrid (axial coordinates, 10 terrain types, A* pathfinding, map generators), NeedsSystem (6 survival needs), GatheringSystem (8 activities) — **COMPLETE**
+
+**Phase B (Hex Grid Integration):** Agent placement, movement decisions, vision-range interaction filtering, cluster detection, hex grid persistence — **COMPLETE**
+
+**Phase C (Economy Deepening):** Settlement dataclass, tick-level production/consumption/skills, inter-settlement trade, governance with taxation/poverty relief — **COMPLETE**
+
+**Phase D (Rich Social Systems):** MarriageManager, ClanManager, InstitutionManager, all wired into SocialDynamicsExtension — **COMPLETE**
+
+**Phase E (Belief Systems):** BeliefSystem, EpistemologyExtension, beliefs API router, 4 epistemology types, 6 belief domains — **COMPLETE**
+
+**Phase F (Inner Life):** ExperientialEngine, InnerLifeExtension, inner-life API router, 6-dim felt-quality vectors, phenomenal quality — **COMPLETE**
+
+**Phase G (Beliefs + Inner Life Views):** BeliefsView, InnerLifeView, frontend wiring — **COMPLETE**
+
+**Narrative Overhaul:** Death tracking with cause-of-death breakdown, EventExtractor (chronicle), BiographyGenerator, chronicle API router, BiographyView, ChronicleView, AgentComparisonView, HexMapView, historical interview mode, session cloning (fork) — **COMPLETE**
 
 ## Source Documentation
 
@@ -279,6 +314,9 @@ All project context lives in `docs/`:
 10. **Epigenetic adaptation**: Do trauma markers persist and help future generations cope?
 11. **Social hierarchy emergence**: What personality mixes produce stable vs. chaotic hierarchies?
 12. **Economic inequality**: How does trade network topology affect wealth distribution?
+13. **Belief system dynamics**: Do empirical beliefs outcompete sacred ones? How does accuracy evolve?
+14. **Experiential divergence**: Do agents with similar traits but different experiences develop different personalities?
+15. **Spatial clustering**: How does hex grid distance affect community formation and genetic diversity?
 
 ## Persistence & Data Model
 
@@ -289,6 +327,7 @@ Key details:
 - Auto-save after every mutation (create, step, run_full, reset, delete)
 - Lazy load: `_session_index` holds metadata; full state deserialized on `get_session()`
 - State blob: zlib-compressed JSON with all_agents, living_agent_ids, metrics_history, next_agent_id, previous_regions
+- Hex grid state persisted when tick engine active
 - Extension state NOT persisted — rebuilt via `_build_extensions()` + `on_simulation_start()` on load
 - RNG reseeded on load: `seed + current_generation`
 - `conftest.py` sets `SELDON_DB_PATH` to tmpdir for test isolation

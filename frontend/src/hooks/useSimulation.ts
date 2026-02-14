@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useSimulationStore } from '../stores/simulation';
 
-export function usePolling(intervalMs: number = 2000) {
+export function usePolling(intervalMs: number = 1000) {
   const { activeSessionId, sessions, refreshAll } = useSimulationStore();
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

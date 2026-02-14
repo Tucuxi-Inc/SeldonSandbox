@@ -58,6 +58,7 @@ class AgentSummaryResponse(BaseModel):
     is_outsider: bool
     dominant_voice: str | None
     latest_contribution: float
+    has_decisions: bool
 
 
 class AgentDetailResponse(AgentSummaryResponse):
@@ -145,6 +146,11 @@ class InjectRequest(BaseModel):
 
 
 # === Sensitivity ===
+
+class CloneRequest(BaseModel):
+    name: str | None = None
+    config_overrides: dict[str, Any] | None = None
+
 
 class SensitivityRequest(BaseModel):
     session_ids: list[str]

@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request
 
 from seldon.api.schemas import (
+    CloneRequest,
     CreateSessionRequest,
     RunRequest,
     SessionResponse,
@@ -82,7 +83,7 @@ def run_session(session_id: str, req: RunRequest, request: Request):
             session.current_generation + req.generations,
             session.config.generations_to_run,
         )
-    mgr.run_full(session_id)
+    mgr.run_full_async(session_id)
     return _session_response(session)
 
 
@@ -97,9 +98,26 @@ def step_session(session_id: str, req: StepRequest, request: Request):
     return _session_response(session)
 
 
+@router.post("/sessions/{session_id}/clone", response_model=SessionResponse)
+def clone_session(session_id: str, body: CloneRequest, request: Request):
+    """Clone a session to create a what-if branch with optional config overrides."""
+    mgr = request.app.state.session_manager
+    try:
+        session = mgr.clone_session(
+            source_id=session_id,
+            config_overrides=body.config_overrides,
+            name=body.name,
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+    return _session_response(session)
+
+
 @router.post("/sessions/{session_id}/reset", response_model=SessionResponse)
 def reset_session(session_id: str, request: Request):
     mgr = request.app.state.session_manager
+    if mgr.is_running(session_id):
+        raise HTTPException(status_code=409, detail="Cannot reset while running")
     try:
         session = mgr.reset_session(session_id)
     except KeyError:

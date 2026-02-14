@@ -19,12 +19,18 @@ import { EconomicsView } from './components/views/economics/EconomicsView';
 import { EnvironmentView } from './components/views/environment/EnvironmentView';
 import { HierarchyView } from './components/views/hierarchy/HierarchyView';
 import { GeneticsView } from './components/views/genetics/GeneticsView';
+import { BeliefsView } from './components/views/beliefs/BeliefsView';
+import { InnerLifeView } from './components/views/inner-life/InnerLifeView';
+import { HexMapView } from './components/views/hex-map/HexMapView';
+import { BiographyView } from './components/views/biography/BiographyView';
+import { ChronicleView } from './components/views/chronicle/ChronicleView';
+import { AgentComparisonView } from './components/views/comparison/AgentComparisonView';
 import { useSimulationStore } from './stores/simulation';
 import { usePolling } from './hooks/useSimulation';
 
 function AppContent() {
   const { refreshSessions } = useSimulationStore();
-  usePolling(2000);
+  usePolling();
 
   useEffect(() => {
     refreshSessions();
@@ -39,7 +45,9 @@ function AppContent() {
         <Route path="/agents" element={<AgentExplorerView />} />
         <Route path="/experiments" element={<ExperimentView />} />
         <Route path="/lineage" element={<LineageView />} />
+        <Route path="/compare" element={<AgentComparisonView />} />
         <Route path="/settlements" element={<SettlementDiagnosticsView />} />
+        <Route path="/hex-map" element={<HexMapView />} />
         <Route path="/network" element={<NetworkView />} />
         <Route path="/lore" element={<LoreEvolutionView />} />
         <Route path="/anomalies" element={<AnomalyDetectionView />} />
@@ -51,6 +59,10 @@ function AppContent() {
         <Route path="/environment" element={<EnvironmentView />} />
         <Route path="/hierarchy" element={<HierarchyView />} />
         <Route path="/genetics" element={<GeneticsView />} />
+        <Route path="/beliefs" element={<BeliefsView />} />
+        <Route path="/inner-life" element={<InnerLifeView />} />
+        <Route path="/biography" element={<BiographyView />} />
+        <Route path="/chronicle" element={<ChronicleView />} />
       </Route>
     </Routes>
   );

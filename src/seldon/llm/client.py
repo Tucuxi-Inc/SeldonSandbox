@@ -104,13 +104,16 @@ class ClaudeClient(LLMClient):
         max_tokens: int = 1024,
         temperature: float = 0.7,
     ) -> LLMResponse:
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            system=system,
-            messages=messages,
-        )
+        try:
+            response = self._client.messages.create(
+                model=self.model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system,
+                messages=messages,
+            )
+        except Exception as exc:
+            raise LLMUnavailableError(f"Anthropic API error: {exc}") from exc
 
         text = response.content[0].text if response.content else ""
         return LLMResponse(

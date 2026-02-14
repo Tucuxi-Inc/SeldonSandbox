@@ -49,6 +49,8 @@ def serialize_agent_summary(agent: Agent, trait_system: TraitSystem) -> dict[str
         "latest_contribution": round(
             float(agent.contribution_history[-1]) if agent.contribution_history else 0.0, 4
         ),
+        "has_decisions": bool(agent.decision_history),
+        "location": list(agent.location) if agent.location else None,
     }
 
 
@@ -107,6 +109,86 @@ def serialize_agent_detail(agent: Agent, trait_system: TraitSystem) -> dict[str,
         "health": round(float(agent.health), 4),
         "needs_history": agent.needs_history,
         "health_history": [round(float(h), 4) for h in agent.health_history],
+        # Death info (Chunk 1)
+        "death_info": agent.extension_data.get("death_info"),
+    }
+
+
+def serialize_agent_at_generation(
+    agent: Agent, trait_system: TraitSystem, target_generation: int,
+) -> dict[str, Any]:
+    """Slice agent history to reconstruct state at a past generation.
+
+    History arrays are indexed relative to birth generation:
+      idx = target_generation - agent.generation
+    """
+    birth_gen = int(agent.generation)
+    idx = target_generation - birth_gen
+    trait_names = trait_system.names()
+
+    # Clamp index
+    if idx < 0:
+        idx = 0
+    max_idx = len(agent.trait_history) - 1 if agent.trait_history else 0
+    if idx > max_idx:
+        idx = max_idx
+
+    # Traits at target generation
+    if agent.trait_history and idx < len(agent.trait_history):
+        traits = {
+            name: round(float(agent.trait_history[idx][i]), 4)
+            for i, name in enumerate(trait_names)
+        }
+    else:
+        traits = {
+            name: round(float(agent.traits[i]), 4)
+            for i, name in enumerate(trait_names)
+        }
+
+    # Processing region at target
+    region = agent.processing_region.value
+    if agent.region_history and idx < len(agent.region_history):
+        region = agent.region_history[idx].value
+
+    # Contribution and suffering at target
+    contribution = 0.0
+    if agent.contribution_history and idx < len(agent.contribution_history):
+        contribution = round(float(agent.contribution_history[idx]), 4)
+
+    suffering = 0.0
+    if agent.suffering_history and idx < len(agent.suffering_history):
+        suffering = round(float(agent.suffering_history[idx]), 4)
+
+    # Filter memories and decisions to target generation
+    memories = [
+        m for m in agent.personal_memories
+        if m.get("created_generation", 0) <= target_generation
+    ]
+    decisions = [
+        d for d in agent.decision_history
+        if d.get("generation", 0) <= target_generation
+    ]
+
+    age_at_target = target_generation - birth_gen
+
+    return {
+        "id": agent.id,
+        "name": agent.name,
+        "age": age_at_target,
+        "generation": birth_gen,
+        "target_generation": target_generation,
+        "birth_order": _int(agent.birth_order),
+        "processing_region": region,
+        "traits": traits,
+        "contribution": contribution,
+        "suffering": suffering,
+        "is_alive": agent.is_alive or target_generation < birth_gen + len(agent.contribution_history),
+        "partner_id": agent.partner_id,
+        "is_outsider": agent.is_outsider,
+        "dominant_voice": agent.dominant_voice,
+        "personal_memories": memories,
+        "decision_history": decisions,
+        "relationship_status": agent.relationship_status,
     }
 
 
@@ -124,14 +206,34 @@ def serialize_family_tree(
     root = all_agents[agent_id]
 
     def _node(a: Agent) -> dict[str, Any]:
+        # Top 3 traits by value
+        trait_names_list = trait_system.names()
+        top_traits = []
+        if len(a.traits) > 0:
+            indexed = [(trait_names_list[i], round(float(a.traits[i]), 4)) for i in range(len(trait_names_list))]
+            indexed.sort(key=lambda x: x[1], reverse=True)
+            top_traits = [{"name": n, "value": v} for n, v in indexed[:3]]
+
+        peak_contribution = round(float(max(a.contribution_history)), 4) if a.contribution_history else 0.0
+        has_breakthrough = any(
+            "breakthrough" in str(m.get("type", "")).lower()
+            for m in a.personal_memories
+        )
+
         return {
             "id": a.id,
             "name": a.name,
+            "age": _int(a.age),
             "generation": _int(a.generation),
             "birth_order": _int(a.birth_order),
             "processing_region": a.processing_region.value,
             "is_alive": a.is_alive,
             "is_outsider": a.is_outsider,
+            "gender": getattr(a, "gender", None),
+            "peak_contribution": peak_contribution,
+            "has_breakthrough": has_breakthrough,
+            "social_role": a.social_role,
+            "top_traits": top_traits,
         }
 
     # Walk up (ancestors)

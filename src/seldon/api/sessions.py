@@ -13,6 +13,7 @@ is deserialized lazily on first access.
 from __future__ import annotations
 
 import logging
+import threading
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -59,6 +60,9 @@ class SessionManager:
         # Session index: metadata for sessions persisted but not yet loaded
         # into memory.  Keyed by session_id.
         self._session_index: dict[str, dict[str, Any]] = {}
+
+        # Track session IDs currently running in background threads
+        self._running: set[str] = set()
 
         # Persistence store
         self._store = None
@@ -262,6 +266,9 @@ class SessionManager:
         """Advance a session by N generations."""
         session = self.get_session(session_id)
 
+        if session_id in self._running:
+            return session  # Background run in progress, don't interfere
+
         if session.status == "completed":
             return session
 
@@ -303,8 +310,76 @@ class SessionManager:
             self.step(session_id, remaining)
         return session
 
+    def run_full_async(self, session_id: str) -> SimulationSession:
+        """Start running a session in a background thread."""
+        session = self.get_session(session_id)
+        if session_id in self._running:
+            return session  # Already running, no-op
+        if session.status == "completed":
+            return session
+
+        session.status = "running"
+        self._running.add(session_id)
+
+        def _worker():
+            try:
+                remaining = session.max_generations - session.current_generation
+                if remaining > 0:
+                    self._step_with_periodic_save(session_id, remaining)
+            except Exception:
+                logger.exception("Background run failed for %s", session_id)
+                session.status = "error"
+            finally:
+                self._running.discard(session_id)
+
+        t = threading.Thread(target=_worker, daemon=True)
+        t.start()
+        return session
+
+    def _step_with_periodic_save(
+        self, session_id: str, n: int,
+    ) -> SimulationSession:
+        """Step N generations, persisting every 5 generations."""
+        session = self.get_session(session_id)
+        if session.status == "completed":
+            return session
+        session.status = "running"
+
+        for i in range(n):
+            if session.current_generation >= session.max_generations:
+                session.status = "completed"
+                break
+
+            for agent in session.engine.population:
+                session.all_agents[agent.id] = agent
+
+            snapshot = session.engine._run_generation(session.current_generation)
+            session.engine.history.append(snapshot)
+            session.collector.collect(session.engine.population, snapshot)
+
+            for agent in session.engine.population:
+                session.all_agents[agent.id] = agent
+
+            session.current_generation += 1
+
+            if session.current_generation >= session.max_generations:
+                session.status = "completed"
+
+            # Periodic save every 5 generations
+            if (i + 1) % 5 == 0:
+                self._persist_session(session)
+
+        self._persist_session(session)
+        return session
+
+    def is_running(self, session_id: str) -> bool:
+        """Check if a session is running in a background thread."""
+        return session_id in self._running
+
     def reset_session(self, session_id: str) -> SimulationSession:
         """Reset a session to generation 0."""
+        if session_id in self._running:
+            raise ValueError(f"Session '{session_id}' is currently running")
         session = self.get_session(session_id)
 
         # Rebuild engine with same config + extensions
@@ -378,8 +453,15 @@ class SessionManager:
         registry.register(EpistemologyExtension())
         registry.register(InnerLifeExtension())
 
-        # Enable those requested (in order — dependency checked)
-        for name in config.extensions_enabled:
+        # Enable those requested — sort so dependencies come first
+        dep_order = ['geography', 'migration', 'resources', 'technology',
+                     'culture', 'conflict', 'social_dynamics', 'diplomacy',
+                     'economics', 'environment', 'epistemology', 'inner_life']
+        ordered = sorted(
+            config.extensions_enabled,
+            key=lambda n: dep_order.index(n) if n in dep_order else len(dep_order),
+        )
+        for name in ordered:
             registry.enable(name)
 
         return registry
@@ -415,6 +497,104 @@ class SessionManager:
                 })
 
         return result
+
+    def clone_session(
+        self,
+        source_id: str,
+        config_overrides: dict[str, Any] | None = None,
+        name: str | None = None,
+    ) -> SimulationSession:
+        """Clone a session: copy current state, optionally override config.
+
+        The clone gets a new session ID and reseeded RNG so it will
+        diverge from the source when stepped forward.
+        """
+        source = self.get_session(source_id)
+
+        # Serialize source state
+        from seldon.api.persistence import build_state_blob, restore_state
+
+        hex_grid_data = None
+        hex_grid = getattr(source.engine, "hex_grid", None)
+        if hex_grid is not None:
+            hex_grid_data = hex_grid.to_dict()
+
+        blob = build_state_blob(
+            all_agents=source.all_agents,
+            living_agent_ids=[a.id for a in source.engine.population],
+            metrics_history=source.collector.metrics_history,
+            next_agent_id=source.engine._next_agent_id,
+            previous_regions=source.collector._previous_regions,
+            hex_grid_data=hex_grid_data,
+        )
+
+        # Apply config overrides
+        config = source.config
+        if config_overrides:
+            config_dict = config.to_dict()
+            config_dict.update(config_overrides)
+            config = ExperimentConfig.from_dict(config_dict)
+
+        # Restore into new engine
+        state = restore_state(blob)
+        registry = self._build_extensions(config)
+
+        if config.tick_config.get("enabled", False):
+            from seldon.core.tick_engine import TickEngine
+            engine = TickEngine(config, extensions=registry)
+        else:
+            engine = SimulationEngine(config, extensions=registry)
+
+        all_agents: dict[str, Agent] = state["all_agents"]
+        engine.population = [
+            all_agents[aid] for aid in state["living_agent_ids"]
+            if aid in all_agents
+        ]
+        engine._next_agent_id = state["next_agent_id"]
+
+        # Restore hex grid if available
+        if "hex_grid" in state and state["hex_grid"] is not None:
+            hex_grid_obj = getattr(engine, "_hex_grid", None)
+            if hex_grid_obj is None and hasattr(engine, "_hex_enabled"):
+                from seldon.core.hex_grid import HexGrid
+                engine._hex_grid = HexGrid.from_dict(state["hex_grid"])
+
+        # Reseed RNG for divergent future
+        gen = source.current_generation
+        seed = config.random_seed
+        if seed is not None:
+            # Use a different seed offset so clone diverges
+            engine.rng = np.random.default_rng(seed + gen + 99999)
+        else:
+            engine.rng = np.random.default_rng()
+
+        # Fire on_simulation_start for extensions
+        for ext in engine.extensions.get_enabled():
+            ext.on_simulation_start(engine.population, config)
+
+        # Rebuild collector
+        collector = MetricsCollector(config)
+        collector.metrics_history = state["metrics_history"]
+        collector._previous_regions = state["previous_regions"]
+
+        new_id = uuid.uuid4().hex[:8]
+        clone_name = name or f"{source.name} (fork)"
+
+        session = SimulationSession(
+            id=new_id,
+            name=clone_name,
+            config=config,
+            engine=engine,
+            collector=collector,
+            status=source.status if source.status != "running" else "created",
+            current_generation=source.current_generation,
+            max_generations=source.max_generations,
+            all_agents=all_agents,
+        )
+
+        self.sessions[new_id] = session
+        self._persist_session(session)
+        return session
 
     def close(self) -> None:
         """Close the persistence store."""

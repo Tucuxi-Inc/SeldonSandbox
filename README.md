@@ -16,10 +16,13 @@ Built by [Kevin Keller](https://github.com/kkeller-tucuxi) of [Tucuxi Inc](https
 - [Running Locally (Development)](#running-locally-development)
 - [The Dashboard](#the-dashboard)
 - [Architecture](#architecture)
+- [Tick Engine & Hex Grid](#tick-engine--hex-grid)
 - [The RSH Five Regions Model](#the-rsh-five-regions-model)
 - [Birth Order Inheritance](#birth-order-inheritance)
 - [Genetics & Epigenetics](#genetics--epigenetics)
-- [Social Hierarchies & Mentorship](#social-hierarchies--mentorship)
+- [Social Systems](#social-systems)
+- [Beliefs & Inner Life](#beliefs--inner-life)
+- [Narrative Layer](#narrative-layer)
 - [Trait System](#trait-system)
 - [Extensions](#extensions)
 - [Outsider Injection & Tracking](#outsider-injection--tracking)
@@ -46,42 +49,59 @@ The simulation models a population of agents, each defined by an N-dimensional p
 5. **Form and dissolve** relationships based on attraction (similarity, complementarity, chemistry)
 6. **Reproduce** -- children inherit traits via birth-order rules (1st=worst, 2nd=weirdest, 3rd=best), optionally with allele-based genetic inheritance
 7. **Transmit memories and lore** -- stories degrade over generations, creating emergent myths
-8. **Participate in social dynamics** -- hierarchies form, mentorships develop, roles are assigned
-9. **Die** -- from age, burnout, conflict, or environmental pressure
+8. **Participate in social dynamics** -- hierarchies form, mentorships develop, marriages and clans emerge, institutions govern
+9. **Develop beliefs** -- agents form, propagate, and revise beliefs through experience and social influence
+10. **Experience inner life** -- subjective felt-quality experiences shape decisions and drift personality over time
+11. **Die** -- from age, burnout, conflict, environmental pressure, or unmet survival needs
 
-All of this is driven by pure math -- utility functions, softmax decisions, configurable thresholds. No randomness is hidden; everything flows through a seeded RNG for full reproducibility. LLMs are used only after the fact, for interviewing agents and narrating events.
+All of this is driven by pure math -- utility functions, softmax decisions, configurable thresholds. No randomness is hidden; everything flows through a seeded RNG for full reproducibility. LLMs are used only after the fact, for interviewing agents, generating biographies, and narrating the chronicle of events.
 
 ---
 
 ## Quick Start
 
-### Docker (recommended)
+### Docker (recommended -- easiest way to get started)
+
+You'll need [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed. Once Docker is running:
 
 ```bash
+# 1. Download the project
 git clone https://github.com/Tucuxi-Inc/SeldonSandbox.git
 cd SeldonSandbox
+
+# 2. Build and start everything (this takes a few minutes the first time)
 docker compose up --build
+
+# 3. Open the dashboard in your browser
+#    Navigate to: http://localhost:3006
 ```
 
-Open [http://localhost:3006](http://localhost:3006) in your browser. The dashboard is ready to use.
+That's it. The dashboard is ready to use. Create a session from Mission Control, configure your simulation parameters, and start exploring.
 
-### Local Development
+**To stop**: Press `Ctrl+C` in the terminal, or run `docker compose down`.
+
+**To restart later**: Just run `docker compose up` again (no `--build` needed unless code changed). Your sessions are saved automatically.
+
+### Local Development (for contributors)
 
 ```bash
+# 1. Download the project
 git clone https://github.com/Tucuxi-Inc/SeldonSandbox.git
 cd SeldonSandbox
 
-# Backend
+# 2. Install Python backend (requires Python 3.11+)
 pip install -e ".[api,dev]"
-uvicorn seldon.api.app:app --host 0.0.0.0 --port 8006
 
-# Frontend (new terminal)
+# 3. Start the API server
+uvicorn seldon.api.app:app --host 0.0.0.0 --port 8006 --reload
+
+# 4. In a new terminal, install and start the frontend (requires Node.js 20+)
 cd frontend
 npm install
 npm run dev
-```
 
-Open [http://localhost:3006](http://localhost:3006).
+# 5. Open http://localhost:3006 in your browser
+```
 
 ### CLI only (no dashboard)
 
@@ -135,7 +155,7 @@ docker compose down -v
 Create a `.env` file in the project root (already gitignored):
 
 ```env
-# Optional: enables Anthropic Claude for agent interviews/narratives
+# Optional: enables Anthropic Claude for agent interviews/narratives/biographies
 ANTHROPIC_API_KEY=sk-ant-...
 
 # Optional: custom Ollama host (default auto-detects Docker vs local)
@@ -216,7 +236,7 @@ docker compose logs -f frontend
 - Python 3.11+
 - Node.js 20+
 - (Optional) Ollama for local LLM
-- (Optional) `ANTHROPIC_API_KEY` for Claude-powered interviews
+- (Optional) `ANTHROPIC_API_KEY` for Claude-powered interviews and biographies
 
 ### Backend
 
@@ -244,30 +264,32 @@ The Vite dev server on port 3006 automatically proxies `/api` requests to the ba
 pytest tests/
 ```
 
-598 tests covering the core engine, genetics, social dynamics, extensions, API endpoints, persistence, and LLM integration. All LLM tests use mocked clients -- no real API calls.
+969 tests covering the core engine, tick engine, hex grid, genetics, social dynamics, beliefs, inner life, extensions, API endpoints, persistence, narrative layer, and LLM integration. All LLM tests use mocked clients -- no real API calls.
 
 ---
 
 ## The Dashboard
 
-The web dashboard at [http://localhost:3006](http://localhost:3006) provides 18 interactive views organized into 6 sections:
+The web dashboard at [http://localhost:3006](http://localhost:3006) provides **24 interactive views** organized into 7 sections:
 
 ### Core Views
 
 | View | What It Shows |
 |------|--------------|
-| **Mission Control** | Create sessions, configure all parameters (population, inheritance, regions, extensions, genetics, social dynamics, diplomacy, economics, environment), build and inject custom outsiders, step through or run generations. The command center for everything. |
+| **Mission Control** | Create sessions, configure all parameters (population, inheritance, regions, extensions, genetics, social dynamics, diplomacy, economics, environment, beliefs, inner life), build and inject custom outsiders, step through or run generations, fork sessions. The command center for everything. |
 | **Population** | Population dynamics over time -- births, deaths, growth rate, region distribution as stacked areas. |
 | **Suffering & Contribution** | The central tension: scatter plots of suffering vs. contribution by processing region. Shows who produces at what cost. |
 | **Agent Explorer** | Searchable, filterable list of all agents (living and dead). Click any agent for full trait profile, history charts, memories, and decision log. |
 | **Experiments** | Side-by-side comparison of multiple sessions. Overlay time series. See how parameter changes affect outcomes. |
 | **Family & Lineage** | Interactive family tree for any agent. Trace trait inheritance up through ancestors and down through descendants. |
+| **Agent Compare** | Select 2-3 agents and compare them side by side with overlaid radar charts, synced timelines (contribution + suffering), region journeys, and relationship detection (partners? parent-child? siblings?). |
 
 ### Advanced Views
 
 | View | What It Shows |
 |------|--------------|
 | **Settlements** | When geography/migration extensions are enabled: settlement map, population by location, viability scores, migration timeline. |
+| **Hex Map** | Interactive D3 hex grid map with zoom/pan. Three color modes (terrain / population density / habitability). Click tiles to see terrain stats and agent lists. Click agents to navigate to their profile. Requires tick engine + hex grid enabled. |
 | **Social Network** | D3 force-directed graph of all social bonds, partnerships, and parent-child relationships. Color-coded by processing region. |
 | **Lore Evolution** | How societal memories change over time. Fidelity decay, myth formation, memory type distribution. |
 | **Anomalies** | Statistical anomaly detection via z-scores. Flags unusual spikes in deaths, breakthroughs, suffering, or population shifts. |
@@ -293,12 +315,16 @@ The web dashboard at [http://localhost:3006](http://localhost:3006) provides 18 
 | View | What It Shows |
 |------|--------------|
 | **Genetics** | Allele frequency stacked bar chart per locus, epigenetic marker prevalence bars, trait-gene correlation horizontal bars. Gracefully degrades when genetics not enabled. |
+| **Beliefs** | Epistemology distribution (empirical/traditional/sacred/mythical), accuracy by belief domain, conviction stats, societal beliefs table. |
+| **Inner Life** | Phenomenal quality distribution (red-to-green gradient), mood radar chart, event type breakdown, experiential drift bars, D3 mood scatter (valence vs arousal). |
 
-### LLM Views
+### Narrative Views
 
 | View | What It Shows |
 |------|--------------|
-| **Agent Interview** | Four-tab interface: (1) Chat with any agent in-character, (2) Generate prose narratives for any generation, (3) Get psychological explanations of agent decisions, (4) Configure LLM provider (Anthropic or Ollama), model selection, API key management, test connection. |
+| **Agent Interview** | Four-tab interface: (1) Chat with any agent in-character, with optional historical mode to interview agents at any point in their life, (2) Generate prose narratives for any generation, (3) Get psychological explanations of agent decisions, (4) Configure LLM provider (Anthropic or Ollama), model selection, API key management, test connection. |
+| **Biographies** | Select any agent (living or dead) and see their full structured biography: personality profile with radar chart, life timeline with severity-coded events, relationship map, contribution arc, cause-of-death analysis with mortality factor breakdown, and optional LLM-generated prose narrative. |
+| **Chronicle** | "The Seldon Chronicle" -- a newspaper-style record of your simulation's history. Left sidebar lists generations with severity indicators and event counts. Right panel shows enriched event articles: breakthroughs name the agents who achieved them, suffering epidemics list the worst-affected, mass death events break down causes. Agent names appear as clickable pills. |
 
 ---
 
@@ -320,6 +346,11 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
     |   +-- TraitDriftEngine ...... experience + age-based trait changes
     |   +-- AttractionModel ....... similarity, complementarity, chemistry
     |   +-- SimulationEngine ...... 9-phase generation loop with extension hooks
+    |   +-- TickEngine ............ sub-generation time (12 ticks/year): needs, gathering, movement
+    |   +-- HexGrid ............... axial hex coordinate system, 10 terrain types, A* pathfinding
+    |   +-- NeedsSystem ........... 6 survival needs with terrain/season decay
+    |   +-- GatheringSystem ....... 8 gathering activities, personality-modulated yields
+    |   +-- ExperientialEngine .... 6-dim felt-quality experiences, recall, phenomenal quality
     |   +-- GeneticModel .......... allele pairs, crossover, mutation, expression
     |   +-- EpigeneticModel ....... environmental markers, transgenerational inheritance
     |   +-- GeneticAttribution .... lineage tracking, trait-gene correlation
@@ -330,32 +361,41 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
     |   +-- LoreEngine ............ memory transmission, fidelity decay, myth formation
     |   +-- SocialHierarchyManager  status, influence, role assignment
     |   +-- MentorshipManager ..... matching, skill transfer, dissolution, chains
+    |   +-- MarriageManager ....... courtship, formalization, divorce, political marriages
+    |   +-- ClanManager ........... founder detection, ancestry, honor, rivalries
+    |   +-- InstitutionManager .... elder councils, guilds, elections, prestige
+    |   +-- CommunityManager ...... community detection, cohesion, factions
+    |   +-- BeliefSystem .......... belief formation, propagation, conflict, accuracy dynamics
     |
-    +-- EXTENSIONS (optional, via ExtensionRegistry)
+    +-- EXTENSIONS (optional, via ExtensionRegistry -- 12 modules)
     |   +-- Geography ............. hexagonal grid, settlements, terrain
     |   +-- Migration ............. settlement viability, group migration (requires Geography)
     |   +-- Resources ............. resource production, distribution, scarcity
     |   +-- Technology ............ tech advancement, tool access
     |   +-- Culture ............... cultural memes, transmission, dominance
-    |   +-- Conflict .............. personality-based triggers, trait-influenced resolution
-    |   +-- Social Dynamics ....... hierarchy + mentorship wired into engine hooks
+    |   +-- Conflict .............. personality-based triggers, resolution outcomes
+    |   +-- Social Dynamics ....... hierarchy + mentorship + marriage + clans + institutions
     |   +-- Diplomacy ............. alliances, rivalries, cultural exchange (requires Geography)
-    |   +-- Economics ............. production, trade, wealth distribution, occupations
+    |   +-- Economics ............. production, trade, wealth, occupations, governance
     |   +-- Environment ........... seasons, climate, drought, plague, disease
+    |   +-- Epistemology .......... belief system formation and dynamics
+    |   +-- Inner Life ............ experiential mind, phenomenal quality, experiential drift
     |
-    +-- LLM (narrative layer, never affects simulation)
+    +-- LLM + NARRATIVE (never affects simulation)
     |   +-- ClaudeClient .......... Anthropic API wrapper
     |   +-- OllamaClient .......... Local model wrapper (Docker-aware)
-    |   +-- AgentInterviewer ...... in-character conversations
+    |   +-- AgentInterviewer ...... in-character conversations (current + historical mode)
     |   +-- NarrativeGenerator .... prose generation summaries
     |   +-- DecisionNarrator ...... psychological decision analysis
+    |   +-- BiographyGenerator .... structured + LLM-enriched agent biographies
+    |   +-- EventExtractor ........ chronicle events: breakthroughs, deaths, suffering, outsiders
     |
-    +-- METRICS & API
+    +-- METRICS, API & PERSISTENCE
         +-- MetricsCollector ...... per-generation statistics
-        +-- FastAPI REST API ...... 13 routers, 50+ endpoints
-        +-- SessionManager ........ in-memory sessions with SQLite persistence
+        +-- FastAPI REST API ...... 17 routers, 70+ endpoints
+        +-- SessionManager ........ in-memory sessions with SQLite persistence + session cloning
         +-- SessionStore .......... SQLite CRUD, zlib-compressed state blobs
-        +-- React Dashboard ....... 18 views, real-time updates
+        +-- React Dashboard ....... 24 views, real-time updates
 ```
 
 ### Generation Loop (9 phases per generation)
@@ -367,8 +407,49 @@ EXPERIMENT CONFIG (all parameters as tunable sliders)
 5. **Relationship Dynamics** -- Process dissolutions, form new pairs via the decision model
 6. **Reproduction** -- Paired agents produce children; traits inherited via birth order rules (optionally with allele-based genetics); lore transmitted
 7. **Lore Evolution** -- Societal-level memory consensus, conflict, mutation, myth formation
-8. **Mortality** -- Age/burnout/extension-modified death checks; handle widowing
+8. **Mortality** -- Age/burnout/extension-modified death checks with detailed cause-of-death tracking; handle widowing
 9. **Extension Hooks** -- Extensions fire at 8 lifecycle points: simulation start, generation start/end, agent created, modify attraction, modify mortality, modify decision utilities, and collect metrics
+
+---
+
+## Tick Engine & Hex Grid
+
+An optional higher-fidelity simulation mode that replaces the generation-level engine with sub-generation time steps and spatial awareness.
+
+### Tick Engine
+
+When enabled (`tick_config.enabled: true` in Mission Control), the simulation runs at **12 ticks per year** (monthly resolution) instead of one generation step. Each tick processes:
+
+- **Needs decay** -- 6 survival needs (hunger, thirst, shelter, safety, warmth, rest) decay based on terrain, season, and life phase
+- **Gathering** -- Agents perform 2 gathering activities per tick, choosing from 8 activity types based on personality and terrain suitability
+- **Movement** -- Agents decide whether to stay or move to adjacent hex tiles using the utility-based decision model
+- **Seasonal effects** -- Spring (months 0-2), Summer (3-5), Autumn (6-8), Winter (9-11) affect need decay rates and gathering yields
+- **Life phase modifiers** -- Infants, children, adolescents, adults, and elders have different capabilities and needs
+
+At year-end (every 12 ticks), standard generation processing runs: random drift, epigenetics, lore evolution, mortality, and snapshot recording. Externally, each year still produces a standard `GenerationMetrics` snapshot -- dashboards and API responses work identically whether tick engine is on or off.
+
+### Hex Grid
+
+A spatial territory system using axial coordinates (q, r) with flat-top hexagons. The default map generator (`generate_california_slice`) creates a 20x10 grid with 10 terrain types:
+
+| Terrain | Habitability | Description |
+|---------|-------------|-------------|
+| Ocean | Impassable | Deep water barrier |
+| Coast | Medium | Coastal zones with fishing |
+| Plains | High | Open grassland, good farming |
+| Valley | Very high | River valleys, best agriculture |
+| Foothills | Medium | Transitional terrain |
+| River Valley | Very high | Water access, fertile soil |
+| Forest | High | Timber, wildlife, shelter |
+| Mountains | Low | Difficult terrain, mineral resources |
+| Desert | Low | Harsh, limited resources |
+| Tundra | Very low | Extreme cold, minimal life |
+
+Agents are placed on habitable tiles near a configurable starting hex. Movement decisions consider personality (risk-taking, adaptability, ambition, openness) and destination habitability. Infants and children move with their caregiver automatically.
+
+**Interaction filtering**: Agents can only form relationships with others within `vision_range` hex distance. This creates organic community clusters that emerge from spatial proximity.
+
+Enable the tick engine and hex grid from Mission Control's configuration panel. The **Hex Map** view provides an interactive D3 visualization of the territory.
 
 ---
 
@@ -465,11 +546,11 @@ When genetics is disabled, the simulation falls back to standard birth-order inh
 
 ---
 
-## Social Hierarchies & Mentorship
+## Social Systems
+
+### Social Hierarchies & Mentorship
 
 An optional extension that adds social status, influence scoring, role assignment, and mentorship systems.
-
-### Hierarchy
 
 Every agent receives a **social status** score (0-1) based on their contributions, age, and social connections. Status determines role assignment:
 
@@ -482,18 +563,119 @@ Every agent receives a **social status** score (0-1) based on their contribution
 | **outsider_bridge** | Injected outsiders who connect communities |
 | **unassigned** | No clear role yet (typically young agents) |
 
-An **influence score** decays over time (configurable rate) and determines how much an agent's decisions affect others.
-
-### Mentorship
-
-Experienced agents can mentor younger ones:
-
-- **Matching**: Based on skill complementarity and social proximity
-- **Skill Transfer**: Mentees gain trait boosts from mentors over time
-- **Dissolution**: Mentorships end when the mentee outgrows the mentor or either dies
-- **Chains**: A mentor's mentor's influence can trace through multi-generation lineages
+An **influence score** decays over time (configurable rate) and determines how much an agent's decisions affect others. Experienced agents can mentor younger ones with skill transfer over time.
 
 Enable via the "Social Dynamics" extension toggle on Mission Control.
+
+### Marriage, Clans & Institutions
+
+When Social Dynamics is enabled, three additional systems can activate:
+
+**Marriage** -- Relationships progress through courtship → formalization after a configurable delay. Married agents share resources, and political marriages can form between different clans for strategic alliance.
+
+**Clans** -- High-status agents with descendants become clan founders. Clan membership provides an honor bonus that feeds into social status. Rival clans emerge organically when clans compete for status.
+
+**Institutions** -- Elder councils form in communities, occupational guilds emerge based on agent skills, and leaders are elected periodically. Institution membership provides a prestige bonus.
+
+All three are configurable via `marriage_config`, `clan_config`, and `institutions_config`.
+
+---
+
+## Beliefs & Inner Life
+
+### Belief System (Epistemology Extension)
+
+Agents form beliefs based on their experiences, propagate them through social bonds, and revise them when confronted with conflicting evidence. Four epistemology types govern how beliefs behave:
+
+| Type | Behavior |
+|------|----------|
+| **Empirical** | Self-corrects toward ground truth over time |
+| **Traditional** | Resistant to change, passed down generationally |
+| **Sacred** | Nearly immune to correction (95% resistance) |
+| **Mythical** | Drifts randomly, disconnected from evidence |
+
+Beliefs cover 6 domains: resources, danger, social structure, productivity, migration, and reproduction. Ground truth is derived from actual simulation state (e.g., R4 vs R2 productivity, real mortality rates), so belief accuracy is measurable.
+
+Traditional beliefs with high conviction can be promoted to sacred status, making them essentially permanent cultural fixtures. The **Beliefs** view visualizes epistemology distribution, accuracy by domain, and societal beliefs.
+
+### Inner Life (Experiential Mind)
+
+Each agent has a subjective experiential mind with 6-dimensional felt-quality vectors:
+
+- **Valence** (-1 to 1): Positive vs negative feeling
+- **Arousal** (0 to 1): Activation level
+- **Social Quality** (-1 to 1): Social connection
+- **Agency** (0 to 1): Sense of control
+- **Novelty** (0 to 1): Surprise and newness
+- **Meaning** (0 to 1): Sense of purpose
+
+Personality modulates how the same event feels to different agents. A breakthrough is experienced differently by a high-creativity agent vs a high-neuroticism one. Experiences are recalled via cosine similarity to current mood, blending into decision-making at a configurable 60/40 ratio (utility vs experiential recall).
+
+**Phenomenal Quality (PQ)** -- a single 0-1 score representing overall subjective well-being -- affects mortality: low PQ increases death risk (despair), high PQ reduces it (will to live).
+
+**Experiential drift** -- lived experiences push traits directionally over time, separate from random drift. Children inherit their parents' top experiences at reduced strength.
+
+The **Inner Life** view shows PQ distribution, mood radar charts, event type breakdowns, and a D3 mood scatter plot.
+
+---
+
+## Narrative Layer
+
+### Biographies
+
+Every agent has a full structured biography available in the **Biographies** view:
+
+- **Identity** -- Name, age, generation, birth order, outsider status
+- **Personality Profile** -- Top traits as a radar chart, processing region, dominant cognitive voice, region journey through life
+- **Life Timeline** -- Severity-coded events: breakthroughs, relationship milestones, suffering episodes, region transitions
+- **Relationships** -- Partner, parents, and children with clickable links
+- **Contribution Arc** -- Contribution over time as a sparkline
+- **Death Analysis** -- When an agent dies, their cause of death is recorded with a detailed mortality factor breakdown (base age, burnout, extension effects, unmet needs). Shown as a horizontal bar chart identifying the primary cause.
+- **LLM Prose** -- Optional: click "Generate with LLM" to produce a narrative biography using your configured provider (Anthropic Claude or Ollama)
+
+### Chronicle ("The Seldon Chronicle")
+
+A newspaper-style record of your simulation's history. Each generation is an "issue" with enriched event articles:
+
+- **Breakthroughs** list the agents who achieved them, by name and processing region
+- **Outsider Arrivals** identify newcomers by name, origin, and region
+- **Suffering Epidemics** list the worst-affected agents, separated by R4 (productive) vs R5 (pathological)
+- **Mass Death Events** list the deceased with cause-of-death breakdowns
+- **Premature Deaths** consolidate into a single grouped article with all affected agents
+
+All agent references appear as named pills (not opaque IDs) so you can see who was involved at a glance.
+
+### Historical Interviews
+
+Interview agents at any point in their life, not just the present. The Interview view offers a historical mode with a generation slider -- select any generation from birth to death and talk to the agent as they were at that moment. They don't know what happens after that point.
+
+### Outsider Stories
+
+Every injected outsider has a dedicated story endpoint showing their integration narrative: timeline of events since arrival, direct descendants, and how their traits have propagated.
+
+### Death Tracking
+
+When agents die, the engine records a detailed mortality breakdown:
+
+```json
+{
+  "generation": 15,
+  "age_at_death": 21,
+  "mortality_breakdown": {
+    "base": 0.02,
+    "age": 0.15,
+    "burnout": 0.45,
+    "needs": 0.12,
+    "extension_conflict": 0.08
+  },
+  "primary_cause": "burnout",
+  "processing_region_at_death": "R5_pathological",
+  "suffering_at_death": 0.87,
+  "burnout_at_death": 0.92
+}
+```
+
+This data powers the biography death analysis panel and the chronicle's enriched death events.
 
 ---
 
@@ -534,7 +716,8 @@ Extensions are optional modules that add environmental complexity. Enable them f
 
 ```python
 config = ExperimentConfig(
-    extensions_enabled=["geography", "migration", "resources", "social_dynamics", "economics"],
+    extensions_enabled=["geography", "migration", "resources", "social_dynamics", "economics",
+                        "epistemology", "inner_life"],
     extensions={
         "geography": {"grid_size": 10},
         "resources": {"base_production": 1.0},
@@ -551,10 +734,12 @@ config = ExperimentConfig(
 | **Technology** | Technology level advancement, tool access, skill development | None |
 | **Culture** | Cultural memes, transmission between agents, meme dominance | None |
 | **Conflict** | Personality-based conflict triggers (dominance clashes, trust betrayals), trait-influenced resolution (submission, compromise, separation, escalation) | None |
-| **Social Dynamics** | Social hierarchy (status, influence, roles), mentorship (matching, skill transfer, chains) | None |
+| **Social Dynamics** | Social hierarchy (status, influence, roles), mentorship, marriage, clans, institutions | None |
 | **Diplomacy** | Alliance formation, rivalry detection, cultural exchange between settlements | Geography |
-| **Economics** | Production, trade routes, wealth distribution, occupations, poverty effects | None |
+| **Economics** | Production, trade routes, wealth distribution, occupations, governance with taxation and poverty relief | None |
 | **Environment** | Seasonal cycles, climate drift, droughts, plagues, disease tracking | Geography |
+| **Epistemology** | Belief formation, propagation, conflict, accuracy tracking, sacred promotion | None |
+| **Inner Life** | Experiential mind, felt-quality experiences, phenomenal quality, experiential drift | None |
 
 Extensions hook into the generation loop at 8 points (simulation start, generation start/end, agent created, modify attraction/mortality/decisions, collect metrics). They can modify how agents make decisions, who they're attracted to, and how likely they are to die -- but the core simulation math stays the same.
 
@@ -563,7 +748,7 @@ Extensions hook into the generation loop at 8 points (simulation start, generati
 The dashboard provides collapsible config panels for each extension group:
 
 - **Genetics & Epigenetics** -- mutation rate, gene-trait influence, transgenerational rate
-- **Social Dynamics** -- status weights, influence decay, mentorship toggle, max mentees
+- **Social Dynamics** -- status weights, influence decay, mentorship toggle, max mentees, marriage/clan/institution settings
 - **Diplomacy** -- alliance/rivalry thresholds, cultural exchange rate
 - **Economics** -- base production, trade distance cost, poverty threshold
 - **Environment** -- season toggle/length, drought/plague probability, climate drift rate
@@ -632,7 +817,7 @@ The simulation runs on pure math. LLMs are used only for narrative features:
 
 ### Agent Interviews
 
-Chat with any agent in character. The LLM receives the agent's full personality profile, memories, lore, and recent decisions, then responds as that character in first person.
+Chat with any agent in character. The LLM receives the agent's full personality profile, memories, lore, and recent decisions, then responds as that character in first person. **Historical mode** lets you interview agents at any point in their life -- they respond as they were at that generation, unaware of future events.
 
 ### Generation Narratives
 
@@ -641,6 +826,10 @@ Generate prose summaries of any generation. The LLM weaves population statistics
 ### Decision Explanations
 
 Select any decision from an agent's history and get a psychological analysis of why they chose what they did, based on their trait contributions and utility scores.
+
+### Biographies
+
+Generate rich prose narratives for any agent's full life story. The biography generator assembles structured data (identity, personality, timeline, relationships, contribution arc, death analysis) and optionally enriches it with LLM prose.
 
 ### Provider Options
 
@@ -761,7 +950,8 @@ config = ExperimentConfig(
     initial_population=80,
     generations_to_run=30,
     random_seed=42,
-    extensions_enabled=["geography", "migration", "resources", "social_dynamics", "economics"],
+    extensions_enabled=["geography", "migration", "resources", "social_dynamics",
+                        "economics", "epistemology", "inner_life"],
     genetics_config={"genetics_enabled": True, "mutation_rate": 0.01},
     epigenetics_config={"epigenetics_enabled": True},
     extensions={
@@ -795,9 +985,25 @@ print(f"Outsider trait diffusion: {report['injections']} injections")
 
 ---
 
+## Session Cloning (Fork)
+
+Clone any session to create a "what-if" branch. The clone gets a complete copy of the session's current state (all agents, metrics, genetics) with a fresh RNG seed, so it diverges from the original going forward.
+
+From the dashboard: click the **Fork** button on Mission Control, optionally modify config parameters, and a new session is created from the current state. From the API:
+
+```
+POST /api/simulation/sessions/{session_id}/clone
+{
+    "name": "What if higher drift?",
+    "config_overrides": {"trait_drift_rate": 0.05}
+}
+```
+
+---
+
 ## API Reference
 
-The REST API runs on port 8006 with 13 routers and 50+ endpoints.
+The REST API runs on port 8006 with 17 routers and 70+ endpoints.
 
 ### Simulation Management -- `/api/simulation`
 
@@ -810,6 +1016,7 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `POST` | `/sessions/{id}/run` | Run to completion |
 | `POST` | `/sessions/{id}/step` | Step N generations |
 | `POST` | `/sessions/{id}/reset` | Reset to generation 0 |
+| `POST` | `/sessions/{id}/clone` | Clone session with optional config overrides |
 
 ### Agents -- `/api/agents`
 
@@ -818,6 +1025,8 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `GET` | `/{session_id}` | List agents (filter by region, generation, birth order, alive/dead) |
 | `GET` | `/{session_id}/{agent_id}` | Full agent detail (traits, history, memories, decisions) |
 | `GET` | `/{session_id}/{agent_id}/family-tree` | Ancestry + descendant tree |
+| `GET` | `/{session_id}/{agent_id}/generation-range` | Birth/last generation range for historical queries |
+| `POST` | `/{session_id}/compare` | Compare 2-3 agents with relationship detection |
 
 ### Metrics -- `/api/metrics`
 
@@ -840,6 +1049,24 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `GET` | `/{session_id}/ripple` | Outsider trait diffusion report |
 | `GET` | `/{session_id}/outsiders` | List all injected outsiders in a session |
 | `GET` | `/{session_id}/outsiders/{agent_id}/impact` | Outsider impact detail (descendants, trait distance) |
+
+### Hex Grid -- `/api/hex`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/grid` | Full hex grid: tiles, terrain, agent counts, clusters |
+| `GET` | `/{session_id}/tile/{q}/{r}` | Tile detail: terrain properties, agents, neighbors |
+
+### Chronicle & Biography -- `/api/chronicle`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/chronicle` | Index of all generations with event counts and severity |
+| `GET` | `/{session_id}/chronicle/{generation}` | Enriched events for a specific generation |
+| `GET` | `/{session_id}/biography/{agent_id}` | Structured biography + optional LLM prose (`?use_llm=true`) |
+| `GET` | `/{session_id}/biography/{agent_id}/timeline` | Life events timeline |
+| `GET` | `/{session_id}/biography/{agent_id}/death-analysis` | Mortality factor breakdown |
+| `GET` | `/{session_id}/outsider-story/{agent_id}` | Outsider integration narrative |
 
 ### Settlements -- `/api/settlements`
 
@@ -873,6 +1100,9 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `GET` | `/{session_id}/roles` | Role breakdown across the population |
 | `GET` | `/{session_id}/mentorship` | Active mentorship pairs and chains |
 | `GET` | `/{session_id}/influence-map` | Agent influence scores and rankings |
+| `GET` | `/{session_id}/marriages` | Active marriages and courtships |
+| `GET` | `/{session_id}/clans` | Clan membership, honor, rivalries |
+| `GET` | `/{session_id}/institutions` | Institutions, elections, guilds |
 
 ### Communities -- `/api/communities`
 
@@ -907,6 +1137,26 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `GET` | `/{session_id}/epigenetic-prevalence` | Epigenetic marker activation rates |
 | `GET` | `/{session_id}/trait-gene-correlation` | Pearson correlation between gene expression and trait values |
 
+### Beliefs -- `/api/beliefs`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/overview` | Belief system overview (totals, conviction, accuracy, distributions) |
+| `GET` | `/{session_id}/agent/{agent_id}` | Individual agent's beliefs |
+| `GET` | `/{session_id}/epistemology-distribution` | Breakdown by epistemology type |
+| `GET` | `/{session_id}/ground-truths` | Current ground truth values |
+| `GET` | `/{session_id}/accuracy-by-domain` | Belief accuracy per domain |
+
+### Inner Life -- `/api/inner-life`
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/{session_id}/overview` | Population experiential overview |
+| `GET` | `/{session_id}/agent/{agent_id}` | Individual agent's inner life state |
+| `GET` | `/{session_id}/phenomenal-quality-distribution` | PQ distribution across population |
+| `GET` | `/{session_id}/mood-map` | All agents' mood vectors |
+| `GET` | `/{session_id}/experiential-drift` | Experiential drift by trait |
+
 ### LLM -- `/api/llm`
 
 | Method | Endpoint | Description |
@@ -917,6 +1167,7 @@ The REST API runs on port 8006 with 13 routers and 50+ endpoints.
 | `POST` | `/ollama-url` | Set custom Ollama base URL |
 | `POST` | `/test-connection` | Test LLM provider connectivity |
 | `POST` | `/{session_id}/interview/{agent_id}` | In-character agent interview |
+| `POST` | `/{session_id}/interview/{agent_id}/historical` | Historical interview at a specific generation |
 | `GET` | `/{session_id}/narrative/{generation}` | Prose narrative for a generation |
 | `POST` | `/{session_id}/decision-explain` | Psychological decision analysis |
 
@@ -935,10 +1186,11 @@ Sessions are automatically persisted to a SQLite database, so they survive backe
 
 ### What's Persisted
 
-- All agent data (traits, history, relationships, genetics, social status, decisions, memories)
+- All agent data (traits, history, relationships, genetics, social status, beliefs, inner life, decisions, memories)
 - Full metrics history (all GenerationMetrics for every generation)
 - Session metadata (name, status, generation, population size)
 - Engine state (next agent ID, previous region tracking for transitions)
+- Hex grid state (tile occupancy, agent positions) when tick engine is active
 - Experiment configuration
 
 ### What's NOT Persisted (Rebuilt on Load)
@@ -984,7 +1236,7 @@ CREATE TABLE sessions (
 
 ## Tests
 
-598 tests across 28 test files covering all layers of the system.
+969 tests across 34 test files covering all layers of the system.
 
 ```bash
 # Run all tests
@@ -1020,16 +1272,22 @@ pytest --cov=seldon tests/
 | `test_presets.py` | All 10 experiment presets |
 | `test_runner.py` | A/B tests, parameter sweeps, multi-seed |
 | `test_extensions.py` | Extension ABC, registry, all extension modules |
-| `test_api.py` | REST API endpoints (sessions, agents, metrics) |
+| `test_api.py` | REST API endpoints (sessions, agents, metrics, chronicle, hex grid) |
 | `test_api_advanced.py` | Advanced endpoints (anomaly, lore, settlements, network, sensitivity) |
 | `test_llm.py` | LLM client, prompts, interviewer, narrator (mocked) |
-| `test_social_dynamics.py` | Hierarchy, mentorship, influence, role assignment |
+| `test_social_dynamics.py` | Hierarchy, mentorship, influence, role assignment, marriage, clans, institutions |
 | `test_genetics.py` | Genetic model, alleles, crossover, mutation, expression |
 | `test_genetics_api.py` | Genetics router, outsider endpoints, custom injection, gender |
 | `test_community.py` | Community detection, diplomatic relations |
-| `test_economics.py` | Production, trade, wealth distribution |
+| `test_economics.py` | Production, trade, wealth distribution, governance |
 | `test_environment.py` | Seasons, climate, events, disease |
 | `test_persistence.py` | Agent serialization roundtrips, SessionStore CRUD, state blob compression, full restart integration |
+| `test_tick_engine.py` | Tick engine adapter, 12-tick year cycle, needs integration |
+| `test_hex_grid.py` | Hex grid coordinates, pathfinding, terrain, map generators |
+| `test_needs.py` | Needs system decay, gathering, caregiver sharing, mortality |
+| `test_tick_integration.py` | Full tick engine + hex grid + needs + movement integration |
+| `test_beliefs.py` | Belief formation, propagation, conflict, epistemology, accuracy |
+| `test_inner_life.py` | Experiential engine, phenomenal quality, drift, recall, inheritance |
 | `conftest.py` | Shared fixtures (DB isolation via temp path) |
 
 All LLM tests use mocked clients. No real API calls are made during testing.
@@ -1041,31 +1299,38 @@ All LLM tests use mocked clients. No real API calls are made during testing.
 ```
 seldon-sandbox/
 +-- src/seldon/
-|   +-- core/           # TraitSystem, Agent, Config, Engine, Inheritance,
+|   +-- core/           # TraitSystem, Agent, Config, Engine, TickEngine, HexGrid,
+|   |                   #   MapGenerators, NeedsSystem, GatheringSystem, Inheritance,
 |   |                   #   Processing, Drift, Attraction, Decision, Council,
-|   |                   #   GeneticModel, EpigeneticModel, GeneticAttribution
+|   |                   #   ExperientialEngine, GeneticModel, EpigeneticModel,
+|   |                   #   GeneticAttribution
 |   +-- social/         # RelationshipManager, FertilityManager, LoreEngine,
-|   |                   #   SocialHierarchyManager, MentorshipManager
+|   |                   #   SocialHierarchyManager, MentorshipManager,
+|   |                   #   MarriageManager, ClanManager, InstitutionManager,
+|   |                   #   CommunityManager, BeliefSystem
 |   +-- metrics/        # MetricsCollector
 |   +-- experiment/     # ExperimentRunner, Presets, Archetypes, OutsiderInterface
-|   +-- extensions/     # SimulationExtension ABC, Registry, 10 extension modules
+|   +-- extensions/     # SimulationExtension ABC, Registry, 12 extension modules
 |   |                   #   (geography, migration, resources, technology, culture,
-|   |                   #    conflict, social_dynamics, diplomacy, economics, environment)
-|   +-- llm/            # ClaudeClient, OllamaClient, Interviewer, Narrator, Prompts
+|   |                   #    conflict, social_dynamics, diplomacy, economics,
+|   |                   #    environment, epistemology, inner_life)
+|   +-- llm/            # ClaudeClient, OllamaClient, Interviewer, Narrator,
+|   |                   #   BiographyGenerator, EventExtractor (Chronicle), Prompts
 |   +-- api/            # FastAPI app, SessionManager, SessionStore (SQLite persistence),
-|                       #   Serializers, 13 routers (simulation, agents, metrics,
+|                       #   Serializers, 17 routers (simulation, agents, metrics,
 |                       #   experiments, settlements, network, advanced, llm, social,
-|                       #   communities, economics, environment, genetics)
+|                       #   communities, economics, environment, genetics, beliefs,
+|                       #   inner_life, hex_grid, chronicle)
 +-- frontend/           # React + TypeScript + Tailwind v4 + Recharts + D3
 |   +-- src/
 |       +-- components/
-|       |   +-- views/         # 18 dashboard views
+|       |   +-- views/         # 24 dashboard views across 7 sections
 |       |   +-- layout/        # Sidebar, MainLayout
-|       |   +-- shared/        # Reusable components
-|       +-- api/client.ts      # API client (50+ functions)
+|       |   +-- shared/        # Reusable components (EmptyState, AgentPortrait, etc.)
+|       +-- api/client.ts      # API client (70+ functions)
 |       +-- stores/            # Zustand state management
 |       +-- types/             # TypeScript interfaces
-+-- tests/              # 598 tests (pytest)
++-- tests/              # 969 tests across 34 files (pytest)
 +-- examples/           # CLI example scripts
 +-- docs/               # Architecture docs, conversation transcripts
 +-- docker-compose.yml  # One-command deployment
@@ -1081,19 +1346,21 @@ seldon-sandbox/
 
 2. **Track and visualize over time.** Every metric has a time series. Every agent records full trait, region, contribution, and suffering history every generation.
 
-3. **Compare runs.** A/B testing and parameter sweeps are first-class. The system is designed for "what happens if I change X?" experiments.
+3. **Compare runs.** A/B testing and parameter sweeps are first-class. The system is designed for "what happens if I change X?" experiments. Session cloning (fork) lets you branch from any point.
 
-4. **Core is simple, complexity is opt-in.** The base simulation runs with zero extensions. All 10 environmental, social, and economic extensions are optional modules. Genetics and epigenetics are opt-in layers that fall back gracefully.
+4. **Core is simple, complexity is opt-in.** The base simulation runs with zero extensions. All 12 environmental, social, cognitive, and economic extensions are optional modules. Genetics, epigenetics, beliefs, and inner life are opt-in layers that fall back gracefully.
 
 5. **Decisions are mathematical and explainable.** Every choice flows through a utility-based decision model: `U(a|P,x) = P^T * W_a * x + b_a` with softmax selection. Per-trait contribution analysis is recorded for every decision.
 
 6. **Memory shapes behavior.** Generational lore with fidelity decay creates emergent mythology. Stories mutate as they pass between generations, eventually becoming myths that still influence behavior.
 
-7. **LLM for interviews only.** The simulation runs on pure math. LLMs are a narrative layer for explaining what happened, not for determining what happens.
+7. **LLM for narratives only.** The simulation runs on pure math. LLMs are a narrative layer for biographies, chronicles, interviews, and explanations -- never for determining what happens.
 
 8. **Full determinism.** Every random operation flows through a seeded `numpy.random.Generator`. Same seed = same results. Always.
 
 9. **Sessions are durable.** Every session mutation auto-saves to SQLite. Restarts don't lose work. Lazy loading keeps startup fast. Persistence failures never crash the system.
+
+10. **Every death tells a story.** Detailed cause-of-death tracking means you can always ask "why did this agent die?" and get a specific, data-backed answer.
 
 ---
 
@@ -1111,6 +1378,9 @@ seldon-sandbox/
 - **Epigenetic adaptation**: Do trauma markers persist and help future generations cope?
 - **Social hierarchy emergence**: What personality mixes produce stable vs. chaotic hierarchies?
 - **Economic inequality**: How does trade network topology affect wealth distribution?
+- **Belief system dynamics**: Do empirical beliefs outcompete sacred ones? How does accuracy evolve?
+- **Experiential divergence**: Do agents with similar traits but different experiences develop different personalities?
+- **Spatial clustering**: How does hex grid distance affect community formation and genetic diversity?
 
 ---
 

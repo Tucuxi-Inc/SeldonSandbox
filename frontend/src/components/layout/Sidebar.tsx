@@ -18,6 +18,12 @@ import {
   Coins,
   CloudSun,
   Dna,
+  BookHeart,
+  Brain,
+  Map,
+  Scale,
+  BookUser,
+  Newspaper,
 } from 'lucide-react';
 
 const coreNavItems = [
@@ -27,10 +33,12 @@ const coreNavItems = [
   { to: '/agents', icon: UserSearch, label: 'Agent Explorer' },
   { to: '/experiments', icon: GitCompare, label: 'Experiments' },
   { to: '/lineage', icon: GitBranch, label: 'Family & Lineage' },
+  { to: '/compare', icon: Scale, label: 'Agent Compare' },
 ];
 
 const advancedNavItems = [
   { to: '/settlements', icon: MapPin, label: 'Settlements' },
+  { to: '/hex-map', icon: Map, label: 'Hex Map' },
   { to: '/network', icon: Network, label: 'Social Network' },
   { to: '/lore', icon: BookOpen, label: 'Lore Evolution' },
   { to: '/anomalies', icon: AlertTriangle, label: 'Anomalies' },
@@ -50,10 +58,14 @@ const economyNavItems = [
 
 const scienceNavItems = [
   { to: '/genetics', icon: Dna, label: 'Genetics' },
+  { to: '/beliefs', icon: BookHeart, label: 'Beliefs' },
+  { to: '/inner-life', icon: Brain, label: 'Inner Life' },
 ];
 
-const llmNavItems = [
+const narrativeNavItems = [
   { to: '/interview', icon: MessageSquare, label: 'Agent Interview' },
+  { to: '/biography', icon: BookUser, label: 'Biographies' },
+  { to: '/chronicle', icon: Newspaper, label: 'Chronicle' },
 ];
 
 function NavItem({ to, icon: Icon, label }: { to: string; icon: React.ComponentType<{ size?: number }>; label: string }) {
@@ -94,7 +106,7 @@ export function Sidebar() {
         </div>
         <div>
           <div className="text-sm font-semibold text-gray-100">Seldon Sandbox</div>
-          <div className="text-xs text-gray-500">v0.6.0</div>
+          <div className="text-xs text-gray-500">v0.8.0</div>
         </div>
       </div>
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
@@ -122,8 +134,8 @@ export function Sidebar() {
           <NavItem key={item.to} {...item} />
         ))}
 
-        <SectionDivider label="LLM" />
-        {llmNavItems.map((item) => (
+        <SectionDivider label="Narrative" />
+        {narrativeNavItems.map((item) => (
           <NavItem key={item.to} {...item} />
         ))}
       </nav>

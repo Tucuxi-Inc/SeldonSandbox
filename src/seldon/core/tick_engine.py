@@ -402,6 +402,14 @@ class TickEngine:
     def hex_grid(self) -> HexGrid | None:
         return self._hex_grid
 
+    @property
+    def outsider_interface(self):
+        return self._engine.outsider_interface
+
+    @property
+    def ripple_tracker(self):
+        return self._engine.ripple_tracker
+
     # ------------------------------------------------------------------
     # Population creation
     # ------------------------------------------------------------------
@@ -615,20 +623,48 @@ class TickEngine:
         for agent in self.population:
             if not agent.is_alive:
                 continue
-            death_rate = self._engine._mortality_rate(agent)
+            # Compute mortality breakdown for cause-of-death tracking
+            base = self.config.base_mortality_rate
+            age_component = agent.age * self.config.age_mortality_factor
+            burnout_component = agent.burnout_level * self.config.burnout_mortality_factor
+            mortality_breakdown = {
+                "base": round(float(base), 6),
+                "age": round(float(age_component), 6),
+                "burnout": round(float(burnout_component), 6),
+            }
+            death_rate = float(np.clip(base + age_component + burnout_component, 0.0, 1.0))
 
             # Add needs-based mortality
             if self._needs_system is not None:
-                death_rate += self._needs_system.compute_needs_mortality_factor(agent)
+                needs_factor = self._needs_system.compute_needs_mortality_factor(agent)
+                if abs(needs_factor) > 1e-9:
+                    mortality_breakdown["needs"] = round(float(needs_factor), 6)
+                death_rate += needs_factor
 
             # Extension modifier hooks
+            pre_ext_rate = death_rate
             for ext in self.extensions.get_enabled():
                 death_rate = ext.modify_mortality(agent, death_rate, self.config)
+            ext_modifier = death_rate - pre_ext_rate
+            if abs(ext_modifier) > 1e-9:
+                mortality_breakdown["extensions"] = round(float(ext_modifier), 6)
 
             death_rate = float(np.clip(death_rate, 0.0, 1.0))
             if self.rng.random() < death_rate:
                 agent.is_alive = False
                 tick_events.deaths += 1
+                # Record cause of death
+                primary_cause = max(mortality_breakdown, key=lambda k: mortality_breakdown[k])
+                agent.extension_data["death_info"] = {
+                    "generation": year,
+                    "age_at_death": int(agent.age),
+                    "mortality_breakdown": mortality_breakdown,
+                    "primary_cause": primary_cause,
+                    "total_mortality_rate": round(death_rate, 6),
+                    "processing_region_at_death": agent.processing_region.value,
+                    "suffering_at_death": round(float(agent.suffering), 4),
+                    "burnout_at_death": round(float(agent.burnout_level), 4),
+                }
 
                 # Remove from hex grid
                 if self._hex_grid is not None and agent.location is not None:
@@ -806,17 +842,20 @@ class TickEngine:
             # Decay needs
             ns.decay_needs(agent, terrain, season.value, agent.life_phase)
 
-            # Gather resources (if capable)
+            # Gather resources (if capable) — two activities per tick
             if gs.can_gather(agent):
                 prioritized = ns.prioritize_needs(agent, ts)
-                activity = gs.choose_activity(
-                    agent, prioritized, terrain, season.value, ts,
-                )
-                gathered = gs.attempt_gathering(
-                    agent, activity, terrain, season.value, ts, self.rng,
-                )
-                need_name = _activity_satisfies(activity)
-                gs.satisfy_need(agent, need_name, gathered)
+                for _attempt in range(2):
+                    activity = gs.choose_activity(
+                        agent, prioritized, terrain, season.value, ts,
+                    )
+                    gathered = gs.attempt_gathering(
+                        agent, activity, terrain, season.value, ts, self.rng,
+                    )
+                    need_name = _activity_satisfies(activity)
+                    gs.satisfy_need(agent, need_name, gathered)
+                    # Re-prioritize after first gather
+                    prioritized = ns.prioritize_needs(agent, ts)
 
         # Caregiver sharing pass
         for agent in self.population:

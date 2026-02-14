@@ -24,6 +24,8 @@ export interface AgentSummary {
   is_outsider: boolean;
   dominant_voice: string | null;
   latest_contribution: number;
+  has_decisions: boolean;
+  location: number[] | null;
 }
 
 export interface AgentDetail extends AgentSummary {
@@ -485,4 +487,227 @@ export interface EpigeneticPrevalence {
 export interface TraitGeneCorrelation {
   enabled: boolean;
   correlations: Record<string, number>;
+}
+
+// === Beliefs / Epistemology ===
+
+export interface BeliefOverview {
+  enabled: boolean;
+  total_beliefs: number;
+  mean_conviction: number;
+  mean_accuracy: number;
+  epistemology_distribution: Record<string, number>;
+  domain_distribution: Record<string, number>;
+  societal_beliefs: Record<string, unknown>[];
+}
+
+export interface EpistemologyDistribution {
+  enabled: boolean;
+  distribution: Record<string, { count: number; mean_accuracy: number }>;
+}
+
+export interface AccuracyByDomain {
+  enabled: boolean;
+  domains: Record<string, { count: number; mean_accuracy: number }>;
+}
+
+// === Inner Life / Experiential Mind ===
+
+export interface InnerLifeOverview {
+  enabled: boolean;
+  mean_phenomenal_quality: number;
+  pq_distribution: Record<string, number>;
+  mean_experience_count: number;
+  event_type_counts: Record<string, number>;
+  population_mood: number[];
+  mean_drift_magnitude: number;
+}
+
+export interface InnerLifeAgentState {
+  enabled: boolean;
+  agent_id: string;
+  state: {
+    experiences: Record<string, unknown>[];
+    phenomenal_quality: number;
+    pq_history: number[];
+    mood: number[];
+    experiential_drift_applied: Record<string, number>;
+  } | null;
+}
+
+export interface PQDistribution {
+  enabled: boolean;
+  distribution: Record<string, number>;
+  stats: { mean: number; std: number; min: number; max: number; count: number };
+}
+
+export interface MoodMapAgent {
+  agent_id: string;
+  mood: Record<string, number>;
+  phenomenal_quality: number;
+}
+
+export interface MoodMapResponse {
+  enabled: boolean;
+  agents: MoodMapAgent[];
+}
+
+export interface ExperientialDriftResponse {
+  enabled: boolean;
+  drift_by_trait: Record<string, { mean_drift: number; max_drift: number; agents_affected: number }>;
+  agents_with_drift: number;
+}
+
+// === Hex Grid ===
+
+export interface HexTileData {
+  q: number;
+  r: number;
+  terrain_type: string;
+  elevation: number;
+  water_access: number;
+  soil_quality: number;
+  natural_resources: number;
+  vegetation: number;
+  wildlife: number;
+  habitability: number;
+  capacity: number;
+  agent_count: number;
+  agent_ids: string[];
+  region_counts: Record<string, number>;
+  agents: { id: string; name: string; processing_region: string }[];
+}
+
+export interface HexGridCluster {
+  tiles: number[][];
+  agent_count: number;
+  agent_ids: string[];
+  center: number[];
+  terrain_types: string[];
+}
+
+export interface HexGridResponse {
+  enabled: boolean;
+  tiles?: HexTileData[];
+  clusters?: HexGridCluster[];
+  stats?: {
+    total_tiles: number;
+    habitable_tiles: number;
+    occupied_tiles: number;
+    total_agents_on_grid: number;
+    width: number;
+    height: number;
+  };
+}
+
+export interface HexTileDetailResponse {
+  enabled: boolean;
+  tile?: {
+    q: number;
+    r: number;
+    terrain_type: string;
+    elevation: number;
+    water_access: number;
+    soil_quality: number;
+    natural_resources: number;
+    vegetation: number;
+    wildlife: number;
+    habitability: number;
+    capacity: number;
+    agent_count: number;
+    is_habitable: boolean;
+  };
+  agents?: AgentSummary[];
+  neighbors?: {
+    q: number;
+    r: number;
+    terrain_type: string;
+    agent_count: number;
+    habitability: number;
+  }[];
+}
+
+// === Chronicle / Biography ===
+
+export interface NotableEvent {
+  event_type: string;
+  generation: number;
+  severity: string;
+  headline: string;
+  detail: string;
+  agent_ids: string[];
+  metrics_snapshot: Record<string, unknown>;
+}
+
+export interface DeathAnalysis {
+  generation: number;
+  age_at_death: number;
+  mortality_breakdown: Record<string, number>;
+  primary_cause: string;
+  total_mortality_rate: number;
+  processing_region_at_death: string;
+  suffering_at_death: number;
+  burnout_at_death: number;
+}
+
+export interface AgentBiography {
+  agent: AgentSummary;
+  identity: {
+    name: string;
+    age: number;
+    generation: number;
+    birth_order: number;
+    is_outsider: boolean;
+    outsider_origin: string | null;
+    gender: string | null;
+  };
+  personality_profile: {
+    top_traits: { name: string; value: number }[];
+    processing_region: string;
+    dominant_voice: string | null;
+    region_journey: string[];
+  };
+  life_timeline: NotableEvent[];
+  relationships: {
+    partner: { id: string; name: string } | null;
+    parents: { id: string; name: string }[];
+    children: { id: string; name: string }[];
+  };
+  contribution_summary: {
+    peak: number;
+    mean: number;
+    total_generations: number;
+    has_breakthrough: boolean;
+  };
+  death_analysis: DeathAnalysis | null;
+  prose: string | null;
+  prose_error?: string | null;
+}
+
+export interface ChronicleEntry {
+  generation: number;
+  events: NotableEvent[];
+  agent_names?: Record<string, string>;
+  population_size: number;
+  births: number;
+  deaths: number;
+}
+
+export interface ChronicleIndex {
+  generations: {
+    generation: number;
+    event_count: number;
+    max_severity: string;
+    population_size: number;
+  }[];
+}
+
+export interface AgentComparisonResult {
+  agents: AgentDetail[];
+  relationships: {
+    type: string;
+    agent_a: string;
+    agent_b: string;
+    detail: string;
+  }[];
 }

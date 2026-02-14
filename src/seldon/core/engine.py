@@ -334,14 +334,39 @@ class SimulationEngine:
         for agent in self.population:
             if not agent.is_alive:
                 continue
-            death_rate = self._mortality_rate(agent)
+            # Compute mortality breakdown for cause-of-death tracking
+            base = self.config.base_mortality_rate
+            age_component = agent.age * self.config.age_mortality_factor
+            burnout_component = agent.burnout_level * self.config.burnout_mortality_factor
+            mortality_breakdown = {
+                "base": round(float(base), 6),
+                "age": round(float(age_component), 6),
+                "burnout": round(float(burnout_component), 6),
+            }
+            death_rate = float(np.clip(base + age_component + burnout_component, 0.0, 1.0))
             # Extension modifier hooks
+            pre_ext_rate = death_rate
             for ext in self.extensions.get_enabled():
                 death_rate = ext.modify_mortality(agent, death_rate, self.config)
+            ext_modifier = death_rate - pre_ext_rate
+            if abs(ext_modifier) > 1e-9:
+                mortality_breakdown["extensions"] = round(float(ext_modifier), 6)
             death_rate = float(np.clip(death_rate, 0.0, 1.0))
             if self.rng.random() < death_rate:
                 agent.is_alive = False
                 events["deaths"] += 1
+                # Record cause of death
+                primary_cause = max(mortality_breakdown, key=lambda k: mortality_breakdown[k])
+                agent.extension_data["death_info"] = {
+                    "generation": generation,
+                    "age_at_death": int(agent.age),
+                    "mortality_breakdown": mortality_breakdown,
+                    "primary_cause": primary_cause,
+                    "total_mortality_rate": round(death_rate, 6),
+                    "processing_region_at_death": agent.processing_region.value,
+                    "suffering_at_death": round(float(agent.suffering), 4),
+                    "burnout_at_death": round(float(agent.burnout_level), 4),
+                }
                 # Widen partner
                 if agent.partner_id:
                     partner = self._find_agent(agent.partner_id)

@@ -229,6 +229,116 @@ def build_generation_context(
     return "\n".join(parts)
 
 
+BIOGRAPHY_SYSTEM_PROMPT = """You are writing a historical biography for the Seldon Sandbox, a multi-generational societal simulation.
+
+Write in third-person historical prose, as if documenting a real life. Your biography should:
+- Open with who the person was and what defined them
+- Trace their trajectory through processing regions (R1-R5) and explain what that meant for their experience
+- Highlight key relationships, children, and partnerships
+- Analyze their death (if deceased): what combination of factors led to it
+- Reference specific trait values and breakthroughs when available
+- Be empathetic but analytical — this is a case study in human dynamics
+
+Write 3-5 paragraphs of rich, vivid prose. Ground every statement in the provided data."""
+
+CHRONICLE_SYSTEM_PROMPT = """You are a chronicler for the Seldon Sandbox, writing in the style of a newspaper editorial about societal events.
+
+Write factual but engaging prose about the events of this generation. Your chronicle should:
+- Lead with the most dramatic or consequential event
+- Reference specific agents by name when relevant
+- Contextualize statistics (population changes, death rates) with narrative meaning
+- Note any emerging patterns or trends
+- Be concise but vivid — like the front page of a community newspaper
+
+Write 2-3 paragraphs. Use concrete numbers from the data."""
+
+HISTORICAL_INTERVIEW_SYSTEM_PROMPT = """You are roleplaying as {name} at age {age} in generation {generation} of a multi-generational societal simulation called the Seldon Sandbox.
+
+IMPORTANT: You are this character AT THIS SPECIFIC POINT IN TIME. You do NOT know what happens after generation {generation}. If asked about future events, you can only speculate based on your current situation.
+
+Your personality, memories, and circumstances are as described in your context. Respond in first person, in character. Your responses should reflect:
+- Your personality traits as they were at this point in your life
+- Only memories and experiences up to this generation
+- Your current processing region and cognitive style
+- Your relationships and life circumstances at this time
+
+Stay in character. Keep responses conversational — 2-4 paragraphs."""
+
+
+def build_biography_context(biography_data: dict[str, Any]) -> str:
+    """Build context string for biography prose generation."""
+    parts: list[str] = []
+
+    identity = biography_data.get("identity", {})
+    parts.append(f"NAME: {identity.get('name', '?')}")
+    parts.append(f"AGE: {identity.get('age', '?')}")
+    parts.append(f"GENERATION: {identity.get('generation', '?')}")
+    parts.append(f"BIRTH ORDER: {identity.get('birth_order', '?')}")
+    if identity.get("is_outsider"):
+        parts.append(f"OUTSIDER from: {identity.get('outsider_origin', 'unknown')}")
+
+    profile = biography_data.get("personality_profile", {})
+    parts.append(f"\nPROCESSING REGION: {profile.get('processing_region', '?')}")
+    if profile.get("region_journey"):
+        parts.append(f"REGION JOURNEY: {' → '.join(profile['region_journey'][:20])}")
+    if profile.get("top_traits"):
+        parts.append("\nTOP TRAITS:")
+        for t in profile["top_traits"]:
+            parts.append(f"  {t['name']}: {t['value']:.2f}")
+
+    contrib = biography_data.get("contribution_summary", {})
+    parts.append(f"\nCONTRIBUTION: peak={contrib.get('peak', 0):.2f}, mean={contrib.get('mean', 0):.2f}")
+    parts.append(f"GENERATIONS LIVED: {contrib.get('total_generations', 0)}")
+    if contrib.get("has_breakthrough"):
+        parts.append("BREAKTHROUGH: Yes")
+
+    rels = biography_data.get("relationships", {})
+    if rels.get("partner"):
+        parts.append(f"\nPARTNER: {rels['partner']['name']}")
+    if rels.get("parents"):
+        parts.append(f"PARENTS: {', '.join(p['name'] for p in rels['parents'])}")
+    if rels.get("children"):
+        parts.append(f"CHILDREN: {', '.join(c['name'] for c in rels['children'])}")
+
+    timeline = biography_data.get("life_timeline", [])
+    if timeline:
+        parts.append("\nKEY LIFE EVENTS:")
+        for event in timeline[:10]:
+            parts.append(f"  [{event['severity'].upper()}] Gen {event['generation']}: {event['headline']}")
+
+    death = biography_data.get("death_analysis")
+    if death:
+        parts.append(f"\nDEATH: Age {death.get('age_at_death', '?')}, generation {death.get('generation', '?')}")
+        parts.append(f"  Primary cause: {death.get('primary_cause', '?')}")
+        breakdown = death.get("mortality_breakdown", {})
+        if breakdown:
+            parts.append(f"  Breakdown: {', '.join(f'{k}={v:.4f}' for k, v in breakdown.items())}")
+
+    return "\n".join(parts)
+
+
+def build_chronicle_context(
+    generation: int,
+    events: list[dict[str, Any]],
+    population_size: int,
+    births: int,
+    deaths: int,
+) -> str:
+    """Build context string for chronicle prose generation."""
+    parts: list[str] = []
+    parts.append(f"GENERATION {generation}")
+    parts.append(f"Population: {population_size}")
+    parts.append(f"Births: {births} | Deaths: {deaths}")
+
+    if events:
+        parts.append(f"\nEVENTS ({len(events)}):")
+        for event in events:
+            parts.append(f"  [{event.get('severity', '?').upper()}] {event.get('headline', '?')}")
+            parts.append(f"    {event.get('detail', '')}")
+
+    return "\n".join(parts)
+
+
 def build_decision_context(
     agent_data: dict[str, Any],
     decision: dict[str, Any],

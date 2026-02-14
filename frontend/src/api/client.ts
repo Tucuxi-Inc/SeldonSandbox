@@ -41,6 +41,20 @@ import type {
   AlleleFrequencies,
   EpigeneticPrevalence,
   TraitGeneCorrelation,
+  BeliefOverview,
+  EpistemologyDistribution,
+  AccuracyByDomain,
+  InnerLifeOverview,
+  InnerLifeAgentState,
+  PQDistribution,
+  MoodMapResponse,
+  ExperientialDriftResponse,
+  HexGridResponse,
+  HexTileDetailResponse,
+  AgentBiography,
+  ChronicleEntry,
+  ChronicleIndex,
+  AgentComparisonResult,
 } from '../types';
 
 const api = axios.create({ baseURL: '/api' });
@@ -436,5 +450,148 @@ export async function getEpigeneticPrevalence(sessionId: string): Promise<Epigen
 
 export async function getTraitGeneCorrelation(sessionId: string): Promise<TraitGeneCorrelation> {
   const { data } = await api.get(`/genetics/${sessionId}/trait-gene-correlation`);
+  return data;
+}
+
+// === Beliefs ===
+
+export async function getBeliefsOverview(sessionId: string): Promise<BeliefOverview> {
+  const { data } = await api.get(`/beliefs/${sessionId}/overview`);
+  return data;
+}
+
+export async function getEpistemologyDistribution(sessionId: string): Promise<EpistemologyDistribution> {
+  const { data } = await api.get(`/beliefs/${sessionId}/epistemology-distribution`);
+  return data;
+}
+
+export async function getAccuracyByDomain(sessionId: string): Promise<AccuracyByDomain> {
+  const { data } = await api.get(`/beliefs/${sessionId}/accuracy-by-domain`);
+  return data;
+}
+
+// === Inner Life ===
+
+export async function getInnerLifeOverview(sessionId: string): Promise<InnerLifeOverview> {
+  const { data } = await api.get(`/inner-life/${sessionId}/overview`);
+  return data;
+}
+
+export async function getInnerLifeAgent(sessionId: string, agentId: string): Promise<InnerLifeAgentState> {
+  const { data } = await api.get(`/inner-life/${sessionId}/agent/${agentId}`);
+  return data;
+}
+
+export async function getPQDistribution(sessionId: string): Promise<PQDistribution> {
+  const { data } = await api.get(`/inner-life/${sessionId}/phenomenal-quality-distribution`);
+  return data;
+}
+
+export async function getMoodMap(sessionId: string): Promise<MoodMapResponse> {
+  const { data } = await api.get(`/inner-life/${sessionId}/mood-map`);
+  return data;
+}
+
+export async function getExperientialDrift(sessionId: string): Promise<ExperientialDriftResponse> {
+  const { data } = await api.get(`/inner-life/${sessionId}/experiential-drift`);
+  return data;
+}
+
+// === Hex Grid ===
+
+export async function getHexGrid(sessionId: string): Promise<HexGridResponse> {
+  const { data } = await api.get(`/hex/${sessionId}/grid`);
+  return data;
+}
+
+export async function getHexTileDetail(sessionId: string, q: number, r: number): Promise<HexTileDetailResponse> {
+  const { data } = await api.get(`/hex/${sessionId}/tile/${q}/${r}`);
+  return data;
+}
+
+// === Chronicle / Biography ===
+
+export async function getAgentBiography(
+  sessionId: string,
+  agentId: string,
+  useLlm: boolean = false,
+  provider?: string,
+  model?: string,
+): Promise<AgentBiography> {
+  const { data } = await api.get(`/chronicle/${sessionId}/biography/${agentId}`, {
+    params: { use_llm: useLlm, provider, model },
+  });
+  return data;
+}
+
+export async function getAgentTimeline(sessionId: string, agentId: string): Promise<{ events: import('../types').NotableEvent[] }> {
+  const { data } = await api.get(`/chronicle/${sessionId}/biography/${agentId}/timeline`);
+  return data;
+}
+
+export async function getDeathAnalysis(sessionId: string, agentId: string): Promise<Record<string, unknown>> {
+  const { data } = await api.get(`/chronicle/${sessionId}/biography/${agentId}/death-analysis`);
+  return data;
+}
+
+export async function getChronicle(sessionId: string, generation: number): Promise<ChronicleEntry> {
+  const { data } = await api.get(`/chronicle/${sessionId}/chronicle/${generation}`);
+  return data;
+}
+
+export async function getChronicleIndex(sessionId: string): Promise<ChronicleIndex> {
+  const { data } = await api.get(`/chronicle/${sessionId}/chronicle`);
+  return data;
+}
+
+export async function getOutsiderStory(sessionId: string, agentId: string): Promise<Record<string, unknown>> {
+  const { data } = await api.get(`/chronicle/${sessionId}/outsider-story/${agentId}`);
+  return data;
+}
+
+// === Historical Interview ===
+
+export async function interviewAgentHistorical(
+  sessionId: string,
+  agentId: string,
+  question: string,
+  targetGeneration: number,
+  conversationHistory?: { role: string; content: string }[],
+  provider: string = 'anthropic',
+  model?: string,
+): Promise<InterviewResponse> {
+  const { data } = await api.post(`/llm/${sessionId}/interview/${agentId}/historical`, {
+    question,
+    target_generation: targetGeneration,
+    conversation_history: conversationHistory,
+    provider,
+    model: model || undefined,
+  });
+  return data;
+}
+
+export async function getAgentGenerationRange(sessionId: string, agentId: string): Promise<{
+  birth_generation: number;
+  last_generation: number;
+  is_alive: boolean;
+}> {
+  const { data } = await api.get(`/agents/${sessionId}/${agentId}/generation-range`);
+  return data;
+}
+
+// === Agent Comparison ===
+
+export async function compareAgents(sessionId: string, agentIds: string[]): Promise<AgentComparisonResult> {
+  const { data } = await api.post(`/agents/${sessionId}/compare`, { agent_ids: agentIds });
+  return data;
+}
+
+// === Session Cloning ===
+
+export async function cloneSession(sessionId: string, params?: {
+  name?: string;
+  config_overrides?: Record<string, unknown>;
+}): Promise<SessionResponse> {
+  const { data } = await api.post(`/simulation/sessions/${sessionId}/clone`, params || {});
   return data;
 }
