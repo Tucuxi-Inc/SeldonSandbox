@@ -5,6 +5,7 @@ interface WorldToolbarProps {
   season: string;
   tickInYear: number;
   populationCount: number;
+  sessionStatus: string;
   colorMode: 'terrain' | 'density' | 'region';
   onColorModeChange: (mode: 'terrain' | 'density' | 'region') => void;
   showConnections: boolean;
@@ -23,6 +24,7 @@ export function WorldToolbar({
   season,
   tickInYear,
   populationCount,
+  sessionStatus,
   colorMode,
   onColorModeChange,
   showConnections,
@@ -42,6 +44,11 @@ export function WorldToolbar({
           </span>
           <span>Tick {tickInYear + 1}/12</span>
           <span>Pop: <span className="font-semibold text-gray-200">{populationCount}</span></span>
+          {sessionStatus === 'completed' && (
+            <span className="rounded bg-amber-600/20 px-2 py-0.5 text-xs font-medium text-amber-400">
+              Complete
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">

@@ -261,7 +261,8 @@ export function WorldHexGrid({
       .attr('r', d => LIFE_PHASE_SIZES[d.life_phase] || 4)
       .attr('fill', d => REGION_COLORS[d.processing_region] || '#6B7280')
       .attr('stroke', d => d.agent_id === selectedAgentId ? '#fff' : '#000')
-      .attr('stroke-width', d => d.agent_id === selectedAgentId ? 1.5 : 0.5);
+      .attr('stroke-width', d => d.agent_id === selectedAgentId ? 1.5 : 0.5)
+      .attr('opacity', 0.9);
 
     // Exit: dead agents shrink out
     circles.exit()

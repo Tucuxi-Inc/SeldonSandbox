@@ -360,21 +360,48 @@ class SessionManager:
             if buffer and len(buffer) > 0:
                 tick_log = buffer[-1]
             else:
+                # Build agent activities from current population so agents
+                # are visible even before any tick has been stepped (e.g.
+                # page load, completed sessions loaded from SQLite).
+                activities: dict[str, dict[str, Any]] = {}
+                agent_names: dict[str, str] = {}
+                for agent in engine.population:
+                    if not agent.is_alive:
+                        continue
+                    loc = getattr(agent, "location", None)
+                    activities[agent.id] = {
+                        "agent_id": agent.id,
+                        "location": list(loc) if loc else None,
+                        "previous_location": None,
+                        "activity": None,
+                        "activity_need": None,
+                        "life_phase": getattr(agent, "life_phase", ""),
+                        "processing_region": (
+                            agent.processing_region.value
+                            if hasattr(agent.processing_region, "value")
+                            else str(agent.processing_region)
+                        ),
+                        "needs_snapshot": {},
+                        "health": getattr(agent, "health", 1.0),
+                        "suffering": float(getattr(agent, "suffering", 0.0)),
+                        "is_pregnant": bool(
+                            agent.extension_data.get("pregnant", False)
+                        ),
+                    }
+                    agent_names[agent.id] = agent.name
                 return {
                     "enabled": True,
                     "year": getattr(engine, "_single_tick_year", 0),
                     "tick_in_year": getattr(engine, "_single_tick_in_year", 0),
                     "global_tick": getattr(engine, "_global_tick", 0),
                     "season": "",
-                    "population_count": sum(
-                        1 for a in engine.population if a.is_alive
-                    ),
+                    "population_count": len(activities),
                     "year_complete": False,
                     "session_status": session.status,
                     "current_generation": session.current_generation,
-                    "agent_activities": {},
+                    "agent_activities": activities,
                     "events": [],
-                    "agent_names": {},
+                    "agent_names": agent_names,
                 }
 
         # Serialize agent activities

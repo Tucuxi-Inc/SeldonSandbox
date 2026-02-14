@@ -117,6 +117,11 @@ export const usePlaybackStore = create<PlaybackStore>((set, get) => ({
         tickHistory: history,
         loading: false,
       });
+
+      // Auto-pause when session completes
+      if (data.session_status === 'completed' && get().isPlaying) {
+        get().pause();
+      }
     } catch {
       set({ loading: false });
     }

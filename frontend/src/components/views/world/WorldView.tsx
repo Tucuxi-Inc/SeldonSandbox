@@ -148,6 +148,7 @@ export function WorldView() {
         season={tick?.season ?? 'spring'}
         tickInYear={tick?.tick_in_year ?? 0}
         populationCount={tick?.population_count ?? 0}
+        sessionStatus={tick?.session_status ?? ''}
         colorMode={colorMode}
         onColorModeChange={setColorMode}
         showConnections={showConnections}
