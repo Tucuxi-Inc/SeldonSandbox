@@ -38,6 +38,7 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
             │   ├── HexGrid (axial coordinates, 10 terrain types, A* pathfinding)
             │   ├── NeedsSystem (6 survival needs, terrain/season decay)
             │   ├── GatheringSystem (8 activities, personality-modulated yields)
+            │   ├── TickActivityLog (per-tick agent activity capture for World View)
             │   ├── ExperientialEngine (6-dim felt-quality, recall, phenomenal quality)
             │   ├── GeneticModel (allele pairs, crossover, mutation, expression)
             │   ├── EpigeneticModel (environmental markers, transgenerational inheritance)
@@ -79,8 +80,8 @@ EXPERIMENT RUNNER (A/B testing, parameter sweeps, archetype experiments)
                 ├── MetricsCollector (per-generation stats)
                 ├── SessionManager (in-memory sessions with SQLite persistence + cloning)
                 ├── SessionStore (SQLite CRUD, zlib-compressed state blobs)
-                ├── FastAPI REST API (17 routers, 70+ endpoints)
-                └── React Dashboard (24 views, real-time updates)
+                ├── FastAPI REST API (18 routers, 70+ endpoints)
+                └── React Dashboard (25 views, real-time updates)
 ```
 
 ### Generation Loop Phases (9 phases in order)
@@ -198,9 +199,9 @@ seldon-sandbox/
 │                      #   experiments, settlements, network, advanced, llm, social,
 │                      #   communities, economics, environment, genetics, beliefs,
 │                      #   inner_life, hex_grid, chronicle)
-├── tests/             # 969 tests (pytest) + conftest.py for DB isolation
+├── tests/             # 1009 tests (pytest) + conftest.py for DB isolation
 ├── frontend/          # React + TypeScript + Tailwind v4 + Recharts + D3
-│   └── src/components/views/  # 24 dashboard views across 7 sections
+│   └── src/components/views/  # 25 dashboard views across 7 sections
 ├── examples/          # run_baseline.py, run_phase2_demo.py
 └── docs/              # Architecture v3.0, handoff v2.0, conversation transcripts
 ```
@@ -211,7 +212,7 @@ seldon-sandbox/
 # Install dependencies (with API + dev extras)
 pip install -e ".[api,dev]"
 
-# Run all tests (969 tests)
+# Run all tests (1009 tests)
 pytest tests/
 
 # Run a single test file
@@ -287,6 +288,8 @@ All phases complete. Current state of the system:
 **Phase G (Beliefs + Inner Life Views):** BeliefsView, InnerLifeView, frontend wiring — **COMPLETE**
 
 **Narrative Overhaul:** Death tracking with cause-of-death breakdown, EventExtractor (chronicle), BiographyGenerator, chronicle API router, BiographyView, ChronicleView, AgentComparisonView, HexMapView, historical interview mode, session cloning (fork) — **COMPLETE**
+
+**World View:** Sim City-like animated hex grid with tick-by-tick stepping, D3/SVG agent animation, playback controls, activity icons, needs visualization, event toasts, connection lines, movement trails, LLM thought bubbles, keyboard shortcuts — **COMPLETE**
 
 ## Source Documentation
 
